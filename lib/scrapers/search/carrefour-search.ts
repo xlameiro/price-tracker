@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import type { SearchResult, StoreSearchScraper } from "./types";
+import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 const HEADERS = {
   "User-Agent":
@@ -93,7 +93,7 @@ export class CarrefourSearchScraper implements StoreSearchScraper {
   readonly storeSlug = "carrefour";
   readonly storeName = "Carrefour";
 
-  async search(query: string): Promise<SearchResult[]> {
+  async search({ query }: SearchContext): Promise<SearchResult[]> {
     try {
       const url = `https://www.carrefour.es/search/maxi/${encodeURIComponent(query)}?lang=es`;
       const response = await fetch(url, {

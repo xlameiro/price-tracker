@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import type { SearchResult, StoreSearchScraper } from "./types";
+import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 const HEADERS = {
   "User-Agent":
@@ -13,7 +13,7 @@ export class MediaMarktSearchScraper implements StoreSearchScraper {
   readonly storeSlug = "mediamarkt";
   readonly storeName = "MediaMarkt";
 
-  async search(query: string): Promise<SearchResult[]> {
+  async search({ query }: SearchContext): Promise<SearchResult[]> {
     try {
       // MediaMarkt uses a JSON search API
       const url = `https://www.mediamarkt.es/es/search.html?query=${encodeURIComponent(query)}`;

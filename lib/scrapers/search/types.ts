@@ -7,10 +7,24 @@ export interface SearchResult {
   imageUrl: string | null;
   productUrl: string;
   isAvailable: boolean;
+  /** EAN/GTIN barcode when the match was exact (EAN lookup) */
+  ean?: string;
+}
+
+/**
+ * Context passed to every store scraper.
+ * `eans` contains EAN/GTIN barcodes resolved from Open Food Facts —
+ * scrapers should prefer EAN-based lookup over text search when possible.
+ */
+export interface SearchContext {
+  /** Original user query */
+  query: string;
+  /** EAN/GTIN codes from product database, most popular first (may be empty) */
+  eans: string[];
 }
 
 export interface StoreSearchScraper {
   storeSlug: string;
   storeName: string;
-  search(query: string): Promise<SearchResult[]>;
+  search(ctx: SearchContext): Promise<SearchResult[]>;
 }

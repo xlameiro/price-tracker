@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import type { SearchResult, StoreSearchScraper } from "./types";
+import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 const HEADERS = {
   "User-Agent":
@@ -13,7 +13,7 @@ export class AmazonSearchScraper implements StoreSearchScraper {
   readonly storeSlug = "amazon-es";
   readonly storeName = "Amazon.es";
 
-  async search(query: string): Promise<SearchResult[]> {
+  async search({ query }: SearchContext): Promise<SearchResult[]> {
     try {
       const url = `https://www.amazon.es/s?k=${encodeURIComponent(query)}&language=es_ES`;
       const response = await fetch(url, {
