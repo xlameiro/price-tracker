@@ -65,6 +65,17 @@ const nextConfig: NextConfig = {
   },
   images: {
     formats: ["image/avif", "image/webp"],
+    remotePatterns: [
+      { protocol: "https", hostname: "**.media-amazon.com" },
+      { protocol: "https", hostname: "**.carrefour.es" },
+      { protocol: "https", hostname: "**.elcorteingles.es" },
+      { protocol: "https", hostname: "**.pccomponentes.com" },
+      { protocol: "https", hostname: "**.mercadona.es" },
+      { protocol: "https", hostname: "**.alcampo.es" },
+      { protocol: "https", hostname: "**.lidl.es" },
+      { protocol: "https", hostname: "**.mediamarkt.es" },
+      { protocol: "https", hostname: "**.eroski.es" },
+    ],
   },
   logging: {
     fetches: {

@@ -1,0 +1,172 @@
+// Prisma schema for Price Tracker
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────
+// Auth.js required models
+// ─────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+  trackedProducts TrackedProduct[]
+  priceAlerts    PriceAlert[]
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// ─────────────────────────────────────────
+// Domain models
+// ─────────────────────────────────────────
+
+model Store {
+  id         String    @id @default(cuid())
+  name       String
+  slug       String    @unique
+  type       StoreType @default(ONLINE)
+  websiteUrl String
+  logoUrl    String?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  priceEntries PriceEntry[]
+
+  @@index([slug])
+}
+
+enum StoreType {
+  ONLINE
+  PHYSICAL
+  BOTH
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  imageUrl    String?
+  category    String?
+  brand       String?
+  ean         String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  priceEntries    PriceEntry[]
+  trackedByUsers  TrackedProduct[]
+  priceAlerts     PriceAlert[]
+
+  @@index([slug])
+  @@index([category])
+  @@index([brand])
+  @@index([ean])
+}
+
+model PriceEntry {
+  id         String      @id @default(cuid())
+  productId  String
+  storeId    String
+  price      Decimal     @db.Decimal(10, 2)
+  currency   String      @default("EUR")
+  url        String?
+  source     PriceSource @default(SCRAPE)
+  isAvailable Boolean    @default(true)
+  scrapedAt  DateTime    @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([productId, storeId])
+  @@index([productId, scrapedAt])
+  @@index([storeId, scrapedAt])
+}
+
+enum PriceSource {
+  API
+  SCRAPE
+  MANUAL
+}
+
+model TrackedProduct {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+model PriceAlert {
+  id          String    @id @default(cuid())
+  userId      String
+  productId   String
+  targetPrice Decimal   @db.Decimal(10, 2)
+  isActive    Boolean   @default(true)
+  triggeredAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([productId, isActive])
+}
