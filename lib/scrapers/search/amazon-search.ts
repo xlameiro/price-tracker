@@ -1,13 +1,6 @@
 import * as cheerio from "cheerio";
+import { browserClient, extractPackageSize } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
-
-const HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-  "Accept-Language": "es-ES,es;q=0.9",
-  Accept:
-    "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-};
 
 export class AmazonSearchScraper implements StoreSearchScraper {
   readonly storeSlug = "amazon-es";
@@ -16,10 +9,7 @@ export class AmazonSearchScraper implements StoreSearchScraper {
   async search({ query }: SearchContext): Promise<SearchResult[]> {
     try {
       const url = `https://www.amazon.es/s?k=${encodeURIComponent(query)}&language=es_ES`;
-      const response = await fetch(url, {
-        headers: HEADERS,
-        signal: AbortSignal.timeout(10_000),
-      });
+      const response = await browserClient.fetch(url, { timeout: 10_000 });
 
       if (!response.ok) return [];
 
@@ -30,24 +20,40 @@ export class AmazonSearchScraper implements StoreSearchScraper {
       $('[data-component-type="s-search-result"]').each((_, el) => {
         const item = $(el);
 
-        const titleEl = item.find("h2 a.a-link-normal span");
-        const productName = titleEl.first().text().trim();
+        // Amazon changed structure: h2 is now inside <a>, not the reverse
+        const h2El = item.find("h2").first();
+        const productName = h2El.text().trim();
         if (!productName) return;
 
-        const href = item.find("h2 a.a-link-normal").attr("href");
+        const href =
+          h2El.closest("a").attr("href") ??
+          item.find('a[href*="/dp/"]').first().attr("href");
         if (!href) return;
-        const productUrl = href.startsWith("http")
-          ? href
-          : `https://www.amazon.es${href}`;
+        // Extract the bare ASIN and build a canonical URL, discarding
+        // referral/tracking params (/ref=..., ?keywords=..., etc.).
+        // This ensures the stored URL is always a clean PDP link.
+        const asinMatch = /\/dp\/([A-Z0-9]{10})/i.exec(href);
+        let productUrl: string;
+        if (asinMatch) {
+          productUrl = `https://www.amazon.es/dp/${asinMatch[1]}`;
+        } else if (href.startsWith("http")) {
+          productUrl = href;
+        } else {
+          productUrl = `https://www.amazon.es${href}`;
+        }
 
-        const priceWhole = item
-          .find(".a-price .a-price-whole")
+        // Amazon SERP renders the struck-through list price (.a-text-price)
+        // before the sale price in DOM order on discounted products.
+        // We must exclude .a-text-price to get the actual buybox price.
+        const priceEl = item.find(".a-price").not(".a-text-price").first();
+        const priceWhole = priceEl
+          .find(".a-price-whole")
           .first()
           .text()
           .replace(/[.,]/g, "")
           .trim();
-        const priceFraction = item
-          .find(".a-price .a-price-fraction")
+        const priceFraction = priceEl
+          .find(".a-price-fraction")
           .first()
           .text()
           .trim();
@@ -71,6 +77,7 @@ export class AmazonSearchScraper implements StoreSearchScraper {
           imageUrl: imageUrl ?? null,
           productUrl,
           isAvailable: true,
+          packageSize: extractPackageSize(productName),
         });
       });
 

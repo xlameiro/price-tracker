@@ -1,8 +1,8 @@
-import type { PriceSource, StoreType } from "@prisma/client";
+import type { PriceSource, ScrapeStatus, StoreType } from "@prisma/client";
 import type { PaginatedResponse, PaginationMeta } from "./index";
 
 // Re-export useful Prisma enums for convenience
-export type { PriceSource, StoreType };
+export type { PriceSource, ScrapeStatus, StoreType };
 
 // ─────────────────────────────────────────
 // Domain types (safe to pass to client)
@@ -15,6 +15,8 @@ export interface StoreDto {
   type: StoreType;
   websiteUrl: string;
   logoUrl: string | null;
+  freeShippingThreshold: number | null;
+  shippingNote: string | null;
 }
 
 export interface ProductDto {
@@ -37,6 +39,12 @@ export interface PriceEntryDto {
   url: string | null;
   source: PriceSource;
   isAvailable: boolean;
+  /** Number of units in the pack (e.g. 44 diapers) */
+  packageSize: number | null;
+  /** Shipping cost —0 means free, null means unknown */
+  shippingCost: number | null;
+  /** Computed: price / packageSize — null when packageSize is unknown */
+  unitPrice: number | null;
   scrapedAt: string;
   store: StoreDto;
 }
@@ -44,6 +52,8 @@ export interface PriceEntryDto {
 export interface ProductWithPricesDto extends ProductDto {
   latestPrices: PriceEntryDto[];
   lowestPrice: PriceEntryDto | null;
+  /** Lowest unit price across all stores with packageSize data */
+  lowestUnitPrice: PriceEntryDto | null;
 }
 
 export interface TrackedProductDto {
@@ -61,6 +71,17 @@ export interface PriceAlertDto {
   triggeredAt: string | null;
   createdAt: string;
   product: ProductDto;
+}
+
+export interface ScrapeRunDto {
+  id: string;
+  storeId: string;
+  startedAt: string;
+  finishedAt: string | null;
+  status: ScrapeStatus;
+  productsScraped: number;
+  errorMessage: string | null;
+  store: StoreDto;
 }
 
 // ─────────────────────────────────────────

@@ -47,6 +47,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // impit is a Rust-based native module (WASM + native bindings) that Turbopack
+  // cannot bundle. Mark it as external so Node.js resolves it at runtime instead.
+  serverExternalPackages: ["impit"],
   async headers() {
     return [
       {

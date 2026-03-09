@@ -90,21 +90,6 @@ export function AddProductForm() {
         body: JSON.stringify({ productId: productData.data.id }),
       });
 
-      await fetch(API_ROUTES.prices, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_SCRAPE_CRON_SECRET ?? ""}`,
-        },
-        body: JSON.stringify({
-          productId: productData.data.id,
-          storeId: store.id,
-          price: 0.01,
-          url: form.productUrl,
-          source: "MANUAL",
-        }),
-      });
-
       if (targetPriceNum !== null) {
         await fetch(API_ROUTES.alerts, {
           method: "POST",

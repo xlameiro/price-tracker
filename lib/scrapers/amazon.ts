@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { browserClient } from "@/lib/scrapers/search/scraper-utils";
 import type { PriceScraper, ScrapedPrice } from "./types";
 
 export class AmazonScraper implements PriceScraper {
@@ -6,15 +7,11 @@ export class AmazonScraper implements PriceScraper {
 
   async scrape(productUrl: string): Promise<ScrapedPrice | null> {
     try {
-      const response = await fetch(productUrl, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept-Language": "es-ES,es;q=0.9",
-          Accept:
-            "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        },
-        signal: AbortSignal.timeout(10_000),
+      // Use impit's Chrome TLS + header fingerprint — plain fetch is blocked by
+      // Amazon's bot detection; impit emulates BoringSSL cipher suites and
+      // auto-generates realistic sec-ch-ua / Sec-Fetch-* headers.
+      const response = await browserClient.fetch(productUrl, {
+        timeout: 10_000,
       });
 
       if (!response.ok) return null;

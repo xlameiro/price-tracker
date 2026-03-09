@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/discover?cleanup=1",
+      "schedule": "0 5 * * 0"
+    },
+    {
       "path": "/api/scrape",
       "schedule": "0 6 * * *"
     }

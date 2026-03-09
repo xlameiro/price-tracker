@@ -8,7 +8,15 @@ function createPrismaClient() {
   if (!connectionString) {
     throw new Error("DATABASE_URL environment variable is not set");
   }
-  const adapter = new PrismaPg({ connectionString });
+  // pg v8 now treats sslmode=require as verify-full. AWS RDS uses its own CA, so we
+  // use libpq-compatible mode which encrypts without requiring full cert chain validation.
+  const sslCompatUrl = connectionString.includes("uselibpqcompat")
+    ? connectionString
+    : connectionString.replace(
+        "sslmode=require",
+        "sslmode=require&uselibpqcompat=true",
+      );
+  const adapter = new PrismaPg({ connectionString: sslCompatUrl });
   return new PrismaClient({
     adapter,
     log:

@@ -1,13 +1,6 @@
 import * as cheerio from "cheerio";
+import { browserClient } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
-
-const HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-  "Accept-Language": "es-ES,es;q=0.9",
-  Accept:
-    "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-};
 
 export class MediaMarktSearchScraper implements StoreSearchScraper {
   readonly storeSlug = "mediamarkt";
@@ -17,10 +10,7 @@ export class MediaMarktSearchScraper implements StoreSearchScraper {
     try {
       // MediaMarkt uses a JSON search API
       const url = `https://www.mediamarkt.es/es/search.html?query=${encodeURIComponent(query)}`;
-      const response = await fetch(url, {
-        headers: HEADERS,
-        signal: AbortSignal.timeout(10_000),
-      });
+      const response = await browserClient.fetch(url, { timeout: 10_000 });
 
       if (!response.ok) return [];
 

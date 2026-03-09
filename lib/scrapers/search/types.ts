@@ -7,6 +7,8 @@ export interface SearchResult {
   imageUrl: string | null;
   productUrl: string;
   isAvailable: boolean;
+  /** Number of units in the pack (e.g. 44 diapers) — extracted from product name or known */
+  packageSize?: number;
   /** EAN/GTIN barcode when the match was exact (EAN lookup) */
   ean?: string;
 }

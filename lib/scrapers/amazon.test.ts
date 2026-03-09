@@ -1,15 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { browserClient } from "./search/scraper-utils";
 import { AmazonScraper } from "./amazon";
-
-const mockFetch = vi.fn();
-vi.stubGlobal("fetch", mockFetch);
 
 describe("AmazonScraper", () => {
   let scraper: AmazonScraper;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     scraper = new AmazonScraper();
-    vi.clearAllMocks();
+    fetchSpy = vi.spyOn(browserClient, "fetch");
   });
 
   afterEach(() => {
@@ -21,22 +20,22 @@ describe("AmazonScraper", () => {
   });
 
   it("should return null when fetch throws a network error", async () => {
-    mockFetch.mockRejectedValueOnce(new Error("Network error"));
+    fetchSpy.mockRejectedValueOnce(new Error("Network error"));
     const result = await scraper.scrape("https://amazon.es/dp/B001");
     expect(result).toBeNull();
   });
 
   it("should return null when response is not ok", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false });
+    fetchSpy.mockResolvedValueOnce({ ok: false } as Response);
     const result = await scraper.scrape("https://amazon.es/dp/B001");
     expect(result).toBeNull();
   });
 
   it("should return null when html has no price elements", async () => {
-    mockFetch.mockResolvedValueOnce({
+    fetchSpy.mockResolvedValueOnce({
       ok: true,
       text: async () => "<html><body><p>No price here</p></body></html>",
-    });
+    } as Response);
     const result = await scraper.scrape("https://amazon.es/dp/B001");
     expect(result).toBeNull();
   });
@@ -51,10 +50,10 @@ describe("AmazonScraper", () => {
         <input id="add-to-cart-button" />
       </body></html>
     `;
-    mockFetch.mockResolvedValueOnce({
+    fetchSpy.mockResolvedValueOnce({
       ok: true,
       text: async () => html,
-    });
+    } as Response);
     const result = await scraper.scrape("https://amazon.es/dp/B001");
     expect(result).not.toBeNull();
     expect(result?.currency).toBe("EUR");

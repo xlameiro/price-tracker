@@ -72,17 +72,21 @@ model VerificationToken {
 // ─────────────────────────────────────────
 
 model Store {
-  id         String    @id @default(cuid())
-  name       String
-  slug       String    @unique
-  type       StoreType @default(ONLINE)
-  websiteUrl String
-  logoUrl    String?
-  isActive   Boolean   @default(true)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id                      String    @id @default(cuid())
+  name                    String
+  slug                    String    @unique
+  type                    StoreType @default(ONLINE)
+  websiteUrl              String
+  logoUrl                 String?
+  isActive                Boolean   @default(true)
+  // null = unknown, 0 = always free, positive = threshold in EUR
+  freeShippingThreshold   Decimal?  @db.Decimal(10, 2)
+  shippingNote            String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   priceEntries PriceEntry[]
+  scrapeRuns   ScrapeRun[]
 
   @@index([slug])
 }
@@ -117,15 +121,19 @@ model Product {
 }
 
 model PriceEntry {
-  id         String      @id @default(cuid())
-  productId  String
-  storeId    String
-  price      Decimal     @db.Decimal(10, 2)
-  currency   String      @default("EUR")
-  url        String?
-  source     PriceSource @default(SCRAPE)
-  isAvailable Boolean    @default(true)
-  scrapedAt  DateTime    @default(now())
+  id           String      @id @default(cuid())
+  productId    String
+  storeId      String
+  price        Decimal     @db.Decimal(10, 2)
+  currency     String      @default("EUR")
+  url          String?
+  source       PriceSource @default(SCRAPE)
+  isAvailable  Boolean     @default(true)
+  // Number of units in the pack (e.g. 44 diapers per pack)
+  packageSize  Int?
+  // Shipping cost for this specific purchase (0 = free)
+  shippingCost Decimal?    @db.Decimal(10, 2)
+  scrapedAt    DateTime    @default(now())
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
@@ -169,4 +177,25 @@ model PriceAlert {
 
   @@index([userId])
   @@index([productId, isActive])
+}
+
+model ScrapeRun {
+  id              String        @id @default(cuid())
+  storeId         String
+  startedAt       DateTime      @default(now())
+  finishedAt      DateTime?
+  status          ScrapeStatus  @default(RUNNING)
+  productsScraped Int           @default(0)
+  errorMessage    String?
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, startedAt])
+  @@index([status])
+}
+
+enum ScrapeStatus {
+  RUNNING
+  SUCCESS
+  FAILED
 }

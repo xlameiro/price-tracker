@@ -3,6 +3,9 @@ import { defineConfig } from "prisma/config";
 // prisma.config.ts is used by the Prisma CLI (migrate, generate, introspect).
 // Runtime DB connection (PrismaPg adapter) is configured in lib/db.ts.
 export default defineConfig({
+  migrations: {
+    seed: "tsx prisma/seed.ts",
+  },
   datasource: {
     // DIRECT_URL bypasses connection pooling for migrations (e.g. PgBouncer).
     // Falls back to DATABASE_URL when DIRECT_URL is not set.

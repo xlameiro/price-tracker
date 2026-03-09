@@ -1,8 +1,29 @@
+import { AhorramasSearchScraper } from "./ahorramas-search";
+import { AlcampoSearchScraper } from "./alcampo-search";
+import { AldiSearchScraper } from "./aldi-search";
+import { AmazonSearchScraper } from "./amazon-search";
+import { ArenalSearchScraper } from "./arenal-search";
+import { AtidaSearchScraper } from "./atida-search";
+import { BmSearchScraper } from "./bm-search";
+import { CarrefourSearchScraper } from "./carrefour-search";
+import { DosFarmaSearchScraper } from "./dosfarma-search";
+import { ElCorteInglesSearchScraper } from "./elcorteingles-search";
 import { EroskiSearchScraper } from "./eroski-search";
+import { FarmaciasDirectSearchScraper } from "./farmaciasdirect-search";
+import { FarmaVazquezSearchScraper } from "./farmavazquez-search";
+import { FroizSearchScraper } from "./froiz-search";
+import { GadisSearchScraper } from "./gadis-search";
+import { HipercorSearchScraper } from "./hipercor-search";
+import { MasPanalesSearchScraper } from "./maspanales-search";
 import { MercadonaSearchScraper } from "./mercadona-search";
+import { NappySearchScraper } from "./nappy-search";
+import { PrimorSearchScraper } from "./primor-search";
 import { resolveProductEans } from "./product-resolver";
+import { PromoFarmaSearchScraper } from "./promofarma-search";
 import { isRelevant } from "./relevance";
+import { SupermercadoFamiliaSearchScraper } from "./supermercado-familia-search";
 import type { SearchResult, StoreSearchScraper } from "./types";
+import { ViandviSearchScraper } from "./viandvi-search";
 
 export type { SearchResult } from "./types";
 
@@ -12,6 +33,27 @@ export type { SearchResult } from "./types";
 const activeScrapers: StoreSearchScraper[] = [
   new MercadonaSearchScraper(),
   new EroskiSearchScraper(),
+  new CarrefourSearchScraper(),
+  new AlcampoSearchScraper(),
+  new ElCorteInglesSearchScraper(),
+  new HipercorSearchScraper(),
+  new AhorramasSearchScraper(),
+  new GadisSearchScraper(),
+  new FroizSearchScraper(),
+  new BmSearchScraper(),
+  new SupermercadoFamiliaSearchScraper(),
+  new AldiSearchScraper(),
+  new ArenalSearchScraper(),
+  new PrimorSearchScraper(),
+  new DosFarmaSearchScraper(),
+  new AtidaSearchScraper(),
+  new FarmaciasDirectSearchScraper(),
+  new FarmaVazquezSearchScraper(),
+  new ViandviSearchScraper(),
+  new AmazonSearchScraper(),
+  new NappySearchScraper(),
+  new MasPanalesSearchScraper(),
+  new PromoFarmaSearchScraper(),
 ];
 
 export const STORE_COUNT = activeScrapers.length;

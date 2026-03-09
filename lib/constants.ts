@@ -1,6 +1,6 @@
-export const APP_NAME = "Price Tracker";
+export const APP_NAME = "Comparador de Pañales";
 export const APP_DESCRIPTION =
-  "Compara precios de productos en las principales tiendas españolas y recibe alertas cuando baja el precio.";
+  "Compara precios de pañales en las principales tiendas y supermercados de España. Encuentra el precio más barato por unidad.";
 export const APP_VERSION = "0.1.0";
 
 export const SITE_URL =
@@ -16,6 +16,8 @@ export const ROUTES = {
   alerts: "/dashboard/alerts",
   addProduct: "/dashboard/add",
   settings: "/dashboard/settings",
+  status: "/status",
+  productDetail: (slug: string) => `/products/${slug}`,
 } as const;
 
 export const API_ROUTES = {
@@ -27,7 +29,9 @@ export const API_ROUTES = {
   alerts: "/api/alerts",
   stores: "/api/stores",
   scrape: "/api/scrape",
+  discover: "/api/discover",
   search: "/api/search",
+  status: "/api/status",
 } as const;
 
 export const SCRAPE_CRON_SECRET = process.env.SCRAPE_CRON_SECRET ?? "";
@@ -38,20 +42,111 @@ export const PAGINATION_DEFAULTS = {
   maxPageSize: 100,
 } as const;
 
+// ─────────────────────────────────────────
+// Store catalogue — all 25 stores covered
+// ─────────────────────────────────────────
+
+export const STORE_CATEGORIES = {
+  supermarket: "Supermercados e Hipermercados",
+  pharmacy: "Perfumerías y Parafarmacias",
+  online: "Tiendas Online y Especializadas",
+} as const;
+
+export type StoreCategory = keyof typeof STORE_CATEGORIES;
+
 export const STORES = [
-  { slug: "amazon-es", name: "Amazon.es" },
-  { slug: "carrefour", name: "Carrefour" },
-  { slug: "elcorteingles", name: "El Corte Inglés" },
-  { slug: "pccomponentes", name: "PcComponentes" },
-  { slug: "mercadona", name: "Mercadona" },
-  { slug: "alcampo", name: "Alcampo" },
-  { slug: "lidl", name: "Lidl" },
-  { slug: "mediamarkt", name: "MediaMarkt" },
-  { slug: "eroski", name: "Eroski" },
-  { slug: "gadis", name: "Gadis" },
-  { slug: "pepco", name: "Pepco" },
-  { slug: "froiz", name: "Froiz" },
-  { slug: "arenal", name: "Arenal" },
+  // Supermercados
+  {
+    slug: "mercadona",
+    name: "Mercadona",
+    category: "supermarket" as StoreCategory,
+  },
+  {
+    slug: "carrefour",
+    name: "Carrefour",
+    category: "supermarket" as StoreCategory,
+  },
+  {
+    slug: "alcampo",
+    name: "Alcampo",
+    category: "supermarket" as StoreCategory,
+  },
+  {
+    slug: "elcorteingles",
+    name: "El Corte Inglés",
+    category: "supermarket" as StoreCategory,
+  },
+  {
+    slug: "hipercor",
+    name: "Hipercor",
+    category: "supermarket" as StoreCategory,
+  },
+  {
+    slug: "eroski",
+    name: "Eroski / Vegalsa",
+    category: "supermarket" as StoreCategory,
+  },
+  { slug: "aldi", name: "Aldi", category: "supermarket" as StoreCategory },
+  {
+    slug: "ahorramas",
+    name: "Ahorramas",
+    category: "supermarket" as StoreCategory,
+  },
+  { slug: "gadis", name: "Gadis", category: "supermarket" as StoreCategory },
+  { slug: "froiz", name: "Froiz", category: "supermarket" as StoreCategory },
+  {
+    slug: "bm",
+    name: "BM Supermercados",
+    category: "supermarket" as StoreCategory,
+  },
+  {
+    slug: "supermercado-familia",
+    name: "Supermercados Familia",
+    category: "supermarket" as StoreCategory,
+  },
+  // Perfumerías y parafarmacias
+  { slug: "arenal", name: "Arenal", category: "pharmacy" as StoreCategory },
+  { slug: "primor", name: "Primor", category: "pharmacy" as StoreCategory },
+  { slug: "dosfarna", name: "DosFarma", category: "pharmacy" as StoreCategory },
+  {
+    slug: "atida",
+    name: "Atida (MiFarma)",
+    category: "pharmacy" as StoreCategory,
+  },
+  {
+    slug: "farmaciasdirect",
+    name: "Farmaciasdirect",
+    category: "pharmacy" as StoreCategory,
+  },
+  {
+    slug: "farmavazquez",
+    name: "Farmavazquez",
+    category: "pharmacy" as StoreCategory,
+  },
+  { slug: "viandvi", name: "Viandvi", category: "pharmacy" as StoreCategory },
+  // Online y especializadas
+  { slug: "amazon-es", name: "Amazon.es", category: "online" as StoreCategory },
+  { slug: "nappy", name: "Nappy.es", category: "online" as StoreCategory },
+  {
+    slug: "maspanales",
+    name: "Mas Pañales",
+    category: "online" as StoreCategory,
+  },
+  {
+    slug: "promofarma",
+    name: "PromoFarma",
+    category: "online" as StoreCategory,
+  },
 ] as const;
 
 export type StoreSlug = (typeof STORES)[number]["slug"];
+
+// Dodot Sensitive size variants
+export const DODOT_PRODUCTS = [
+  {
+    slug: "dodot-sensitive-t5",
+    name: "Pañales Dodot Sensitive Talla 5",
+    size: "T5",
+    kgRange: "11-16 kg",
+  },
+] as const;
