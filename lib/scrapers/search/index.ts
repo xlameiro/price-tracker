@@ -78,11 +78,15 @@ export async function searchAllStores(query: string): Promise<SearchResult[]> {
     activeScrapers.map((scraper) => scraper.search(ctx)),
   );
 
-  const all = settled
-    .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
-    // EAN-matched results are always relevant; apply relevance filter only to
-    // text-search results (those without an `ean` field set)
-    .filter((r) => r.ean !== undefined || isRelevant(r.productName, query));
+  const all = settled.flatMap((result) =>
+    result.status === "fulfilled" ? result.value : [],
+  );
 
-  return all.sort((a, b) => a.price - b.price);
+  // EAN-matched results are always relevant; apply relevance filter only to
+  // text-search results (those without an `ean` field set)
+  const filtered = all.filter(
+    (r) => r.ean !== undefined || isRelevant(r.productName, query),
+  );
+
+  return filtered.sort((a, b) => a.price - b.price);
 }

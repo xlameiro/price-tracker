@@ -79,19 +79,30 @@ export function isRelevant(productName: string, query: string): boolean {
 
   if (tokens.length === 0) return true;
 
-  // ── Strict size-number check ─────────────────────────────────────────────
-  // Each numeric token (e.g. "5") must appear in the ORIGINAL name either as
-  // a standalone number or as a T-code prefix ("T5"), NOT inside a weight range.
+  // ── Strict size-number check ──────────────────────────────────────────────
+  // Each numeric token (e.g. "5") must appear in the name as a talla indicator,
+  // not as a weight-range value like "de 2 a 5 kg".
   //
-  // Both the leading AND trailing character classes exclude "-" so that:
-  //   "(2-5 kg)"  →  "5" preceded by "-"  →  no match  →  FAIL ✓
-  //   "(5-10 kg)" →  "5" followed by "-"  →  no match  →  FAIL ✓
-  //   "52 ud"     →  "5" followed by "2"  →  no match  →  FAIL ✓
-  //   "Talla 5"   →  "5" surrounded by spaces  →  PASS ✓
-  //   "T5"        →  t-prefixed, surrounded by spaces  →  PASS ✓
+  // When the query explicitly mentions "talla N" we require the product name to
+  // also say "talla N" or use the short code "TN" — standing alone is not enough
+  // because weight ranges such as "(2 a 5 kg)" or "(11-16 kg)" would otherwise
+  // cause a Talla‑1 product to pass the filter for a Talla‑5 query.
+  //
+  // When there is no "talla" keyword in the query (e.g. "Galaxy S5") we fall back
+  // to the looser standalone-number check.
+  //
+  //   "de 2 a 5 kg talla 1"  →  queryHasTalla=true  →  no "talla 5" / "T5"  →  FAIL ✓
+  //   "(11-16 kg) talla 5+"  →  queryHasTalla=true  →  has "talla 5"  →  PASS ✓
+  //   "T5 90 uds"            →  queryHasTalla=true  →  has "T5"  →  PASS ✓
+  //   "52 ud"                →  queryHasTalla=false  →  "5" followed by "2"  →  FAIL ✓
+  const queryHasTalla = /\btalla\s*\d/.test(normQuery);
   const numbers = tokens.filter((t) => /^\d+$/.test(t));
   for (const num of numbers) {
-    const sizePattern = new RegExp(`(?:^|[^0-9-])t?${num}(?:[^0-9-]|$)`, "i");
+    const sizePattern = queryHasTalla
+      ? // Require explicit "talla N" or "TN" code — ignores bare numbers in weight ranges
+        new RegExp(`talla\\s*${num}\\b|\\bT${num}\\b`, "i")
+      : // Fallback for non-talla queries: standalone number or T-prefix
+        new RegExp(`(?:^|[^0-9-])t?${num}(?:[^0-9-]|$)`, "i");
     if (!sizePattern.test(rawLower)) return false;
   }
 

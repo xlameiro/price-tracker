@@ -7,6 +7,7 @@ interface PriceRow {
   freeShippingThreshold: number | null;
   shippingNote: string | null;
   price: number;
+  subscribePrice: number | null;
   packageSize: number | null;
   shippingCost: number | null;
   productUrl: string | null;
@@ -61,15 +62,18 @@ export function PriceRankingTable({ rows }: Readonly<PriceRankingTableProps>) {
     );
   }
 
-  // Sort by unit price ascending; rows without packageSize go after those with it
+  // Sort by best unit price ascending (subscribePrice beats regular price);
+  // rows without packageSize go after those with it
   const sorted = [...rows].sort((a, b) => {
-    const unitA = a.packageSize ? a.price / a.packageSize : null;
-    const unitB = b.packageSize ? b.price / b.packageSize : null;
+    const bestA = a.subscribePrice ?? a.price;
+    const bestB = b.subscribePrice ?? b.price;
+    const unitA = a.packageSize ? bestA / a.packageSize : null;
+    const unitB = b.packageSize ? bestB / b.packageSize : null;
 
     if (unitA !== null && unitB !== null) return unitA - unitB;
     if (unitA !== null) return -1;
     if (unitB !== null) return 1;
-    return a.price - b.price;
+    return bestA - bestB;
   });
 
   return (
@@ -85,6 +89,9 @@ export function PriceRankingTable({ rows }: Readonly<PriceRankingTableProps>) {
             </th>
             <th scope="col" className="px-4 py-3 text-right font-semibold">
               Precio pack
+            </th>
+            <th scope="col" className="px-4 py-3 text-right font-semibold">
+              Recurrente
             </th>
             <th scope="col" className="px-4 py-3 text-right font-semibold">
               Uds
@@ -103,7 +110,7 @@ export function PriceRankingTable({ rows }: Readonly<PriceRankingTableProps>) {
             </th>
           </tr>
           <tr>
-            <td colSpan={7} className="px-4 pb-1 text-xs text-foreground/40">
+            <td colSpan={8} className="px-4 pb-1 text-xs text-foreground/40">
               Todos los precios incluyen IVA (10%). Actualizados:{" "}
               {rows[0]
                 ? new Date(rows[0].scrapedAt).toLocaleDateString("es-ES")
@@ -113,8 +120,9 @@ export function PriceRankingTable({ rows }: Readonly<PriceRankingTableProps>) {
         </thead>
         <tbody className="divide-y divide-foreground/5">
           {sorted.map((row, index) => {
+            const bestPrice = row.subscribePrice ?? row.price;
             const unitPrice = row.packageSize
-              ? row.price / row.packageSize
+              ? bestPrice / row.packageSize
               : null;
             const isFirst = index === 0;
 
@@ -149,6 +157,15 @@ export function PriceRankingTable({ rows }: Readonly<PriceRankingTableProps>) {
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums font-semibold">
                   {formatEUR(row.price)}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums">
+                  {row.subscribePrice ? (
+                    <span className="font-semibold text-green-700 dark:text-green-400">
+                      {formatEUR(row.subscribePrice)}
+                    </span>
+                  ) : (
+                    <span className="text-foreground/30">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums text-foreground/70">
                   {row.packageSize ?? (

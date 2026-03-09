@@ -20,28 +20,71 @@ export const browserClient = new Impit({
 /**
  * Extract the number of units in a pack from a product name.
  * e.g. "Pañales Dodot 44 unidades" → 44, "Dodot T5 42 uds" → 42
+ * Handles multi-pack formats: "2 x 44" → 88, "3x48 uds" → 144
  * Input is internal scraped data (not user-controlled).
  */
 export function extractPackageSize(name: string): number | undefined {
   const lower = name.toLowerCase();
   const tokens = lower.split(/\s+/);
+
   for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i] ?? "";
-    if (!/^\d+$/.test(token)) continue;
-    // Strip trailing punctuation (e.g. "und." → "und", "uds," → "uds")
-    const next = (tokens[i + 1] ?? "").replace(/[^a-záéíóúüñ]/g, "");
+    const tok = tokens[i] ?? "";
+
+    // Case 1: token is "NxM" or "N×M" in one piece — e.g. "3x48"
+    const inline = tryMultiply(tok);
+    if (inline !== undefined) return inline;
+
+    // Case 2: three consecutive tokens "N" "x" "M" — e.g. "2 x 44"
     if (
-      next === "pañales" ||
-      next === "panales" ||
-      next.startsWith("ud") || // uds, ud, udn
-      next.startsWith("und") || // und (used by some Spanish stores)
-      next === "unidades" ||
-      next === "unidad"
+      /^\d+$/.test(tok) &&
+      isMultiplierSymbol(tokens[i + 1] ?? "") &&
+      /^\d+$/.test(tokens[i + 2] ?? "")
     ) {
-      return Number.parseInt(token, 10);
+      const result = applyMultiply(tok, tokens[i + 2] ?? "");
+      if (result !== undefined) return result;
+    }
+
+    // Case 3: "N <unit-keyword>" — e.g. "168 uds"
+    if (/^\d+$/.test(tok)) {
+      const next = (tokens[i + 1] ?? "").replace(/[^a-záéíóúüñ]/g, "");
+      if (isUnitKeyword(next)) return Number.parseInt(tok, 10);
     }
   }
+
   return undefined;
+}
+
+function tryMultiply(tok: string): number | undefined {
+  const idx = tok.search(/[x×]/);
+  if (idx <= 0 || idx === tok.length - 1) return undefined;
+  const leftStr = tok.slice(0, idx);
+  const rightStr = tok.slice(idx + 1);
+  if (!/^\d+$/.test(leftStr) || !/^\d+$/.test(rightStr)) return undefined;
+  return applyMultiply(leftStr, rightStr);
+}
+
+function isMultiplierSymbol(tok: string): boolean {
+  return tok === "x" || tok === "×";
+}
+
+function applyMultiply(leftStr: string, rightStr: string): number | undefined {
+  const left = Number.parseInt(leftStr, 10);
+  const right = Number.parseInt(rightStr, 10);
+  // multiplier 2–9, pack size 20–250 (realistic diaper counts)
+  if (left >= 2 && left <= 9 && right >= 20 && right <= 250)
+    return left * right;
+  return undefined;
+}
+
+function isUnitKeyword(word: string): boolean {
+  return (
+    word === "pañales" ||
+    word === "panales" ||
+    word.startsWith("ud") || // uds, ud, udn
+    word.startsWith("und") || // und (used by some Spanish stores)
+    word === "unidades" ||
+    word === "unidad"
+  );
 }
 
 /**

@@ -1,5 +1,5 @@
-import * as cheerio from "cheerio";
 import { browserClient } from "@/lib/scrapers/search/scraper-utils";
+import * as cheerio from "cheerio";
 import type { PriceScraper, ScrapedPrice } from "./types";
 
 export class AmazonScraper implements PriceScraper {
@@ -19,17 +19,45 @@ export class AmazonScraper implements PriceScraper {
       const html = await response.text();
       const $ = cheerio.load(html);
 
-      // Primary price selector (buybox)
-      const priceWhole = $(".a-price .a-price-whole").first().text().trim();
-      const priceFraction = $(".a-price .a-price-fraction")
-        .first()
-        .text()
-        .trim();
+      // Amazon assigns `.priceToPay` to the actual checkout price.
+      // `.a-text-price` marks the struck-through "Precio único" (list price)
+      // that often appears first in DOM order — we must skip it.
+      // `.a-offscreen` contains the complete price string (e.g. "78,62 €")
+      // which is more reliable than assembling whole + fraction spans because
+      // Amazon occasionally nests extra spans inside `.a-price-whole`.
+      let priceEl = $(".priceToPay").first();
+      if (!priceEl.length) {
+        priceEl = $("#corePriceDisplay_desktop_feature_div .a-price")
+          .not(".a-text-price")
+          .first();
+      }
+      if (!priceEl.length) {
+        priceEl = $(".a-price").not(".a-text-price").first();
+      }
 
-      if (!priceWhole) return null;
+      if (!priceEl.length) return null;
 
-      const rawPrice = `${priceWhole.replace(/[.,]/g, "")}${priceFraction || "00"}`;
-      const price = Number.parseInt(rawPrice, 10) / 100;
+      // Prefer the clean offscreen text ("78,62 €"); fall back to whole/fraction.
+      const offscreen = priceEl.find(".a-offscreen").first().text().trim();
+      let price: number;
+
+      if (offscreen) {
+        // Pattern: digits, decimal separator (comma or dot), exactly two digits
+        const PRICE_RE = /^(\d{1,6})[,.](\d{2})/;
+        const match = PRICE_RE.exec(offscreen);
+        if (!match) return null;
+        price = Number.parseInt(`${match[1]}${match[2]}`, 10) / 100;
+      } else {
+        const priceWhole = priceEl.find(".a-price-whole").first().text().trim();
+        const priceFraction = priceEl
+          .find(".a-price-fraction")
+          .first()
+          .text()
+          .trim();
+        if (!priceWhole) return null;
+        const rawPrice = `${priceWhole.replace(/[.,]/g, "")}${priceFraction || "00"}`;
+        price = Number.parseInt(rawPrice, 10) / 100;
+      }
 
       if (!Number.isFinite(price) || price <= 0) return null;
 

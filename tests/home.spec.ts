@@ -6,7 +6,7 @@ test.describe("Home Page", () => {
   });
 
   test("has correct page title", async ({ page }) => {
-    await expect(page).toHaveTitle(/Next\.js Starter/);
+    await expect(page).toHaveTitle(/Comparador de Pañales/);
   });
 
   test("has a skip to main content link", async ({ page, browserName }) => {

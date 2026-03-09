@@ -131,6 +131,8 @@ model PriceEntry {
   isAvailable  Boolean     @default(true)
   // Number of units in the pack (e.g. 44 diapers per pack)
   packageSize  Int?
+  // Recurring / Subscribe & Save price when available (always lower than price)
+  subscribePrice Decimal?  @db.Decimal(10, 2)
   // Shipping cost for this specific purchase (0 = free)
   shippingCost Decimal?    @db.Decimal(10, 2)
   scrapedAt    DateTime    @default(now())

@@ -2,7 +2,10 @@ export interface SearchResult {
   storeSlug: string;
   storeName: string;
   productName: string;
+  /** Standard single-purchase price */
   price: number;
+  /** Subscribe & Save / recurring purchase price — lower than price when available */
+  subscribePrice?: number;
   currency: string;
   imageUrl: string | null;
   productUrl: string;

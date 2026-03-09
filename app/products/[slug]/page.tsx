@@ -1,4 +1,5 @@
 import { PriceRankingTable } from "@/components/products/price-ranking-table";
+import { RefreshPricesButton } from "@/components/products/refresh-prices-button";
 import { SkipLink } from "@/components/skip-link";
 import { APP_NAME, DODOT_PRODUCTS, ROUTES } from "@/lib/constants";
 import { db } from "@/lib/db";
@@ -55,6 +56,7 @@ export default async function ProductPage({
     select: {
       id: true,
       price: true,
+      subscribePrice: true,
       packageSize: true,
       shippingCost: true,
       url: true,
@@ -81,6 +83,7 @@ export default async function ProductPage({
       : null,
     shippingNote: entry.store.shippingNote,
     price: Number(entry.price),
+    subscribePrice: entry.subscribePrice ? Number(entry.subscribePrice) : null,
     packageSize: entry.packageSize,
     shippingCost: entry.shippingCost ? Number(entry.shippingCost) : null,
     productUrl: entry.url,
@@ -91,7 +94,8 @@ export default async function ProductPage({
   const lowestUnitPrice =
     rows
       .filter((r) => r.packageSize !== null && r.packageSize > 0)
-      .map((r) => r.price / r.packageSize!)
+      // Use subscribePrice when available — it's the best real price for the customer
+      .map((r) => (r.subscribePrice ?? r.price) / r.packageSize!)
       .sort((a, b) => a - b)[0] ?? null;
 
   // Extra metadata from DODOT_PRODUCTS constant (size, kg range)
@@ -175,10 +179,13 @@ export default async function ProductPage({
 
         {/* Price ranking table */}
         <section aria-labelledby="ranking-heading">
-          <h2 id="ranking-heading" className="mb-4 text-xl font-semibold">
-            Comparativa de precios ({rows.length}{" "}
-            {rows.length === 1 ? "tienda" : "tiendas"})
-          </h2>
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <h2 id="ranking-heading" className="text-xl font-semibold">
+              Comparativa de precios ({rows.length}{" "}
+              {rows.length === 1 ? "tienda" : "tiendas"})
+            </h2>
+            <RefreshPricesButton slug={product.slug} />
+          </div>
           <PriceRankingTable rows={rows} />
         </section>
 
