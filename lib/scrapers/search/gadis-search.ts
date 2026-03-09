@@ -1,4 +1,4 @@
-import { extractPackageSize } from "./scraper-utils";
+import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // These are public values embedded in www.gadisline.com's __NEXT_DATA__ HTML.
@@ -45,7 +45,7 @@ function toSearchResult(
     imageUrl,
     productUrl,
     isAvailable: true,
-    packageSize: extractPackageSize(productName),
+    ...parseProductQuantity(productName),
   };
 }
 

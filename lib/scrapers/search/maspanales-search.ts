@@ -1,4 +1,4 @@
-import { extractPackageSize } from "./scraper-utils";
+import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // MasPanales uses PrestaShop + IQITsearch module (same as Nappy).
@@ -55,7 +55,7 @@ export class MasPanalesSearchScraper implements StoreSearchScraper {
             imageUrl,
             productUrl,
             isAvailable: true,
-            packageSize: extractPackageSize(productName),
+            ...parseProductQuantity(productName),
           } satisfies SearchResult,
         ];
       });

@@ -1,4 +1,4 @@
-import { extractPackageSize } from "./scraper-utils";
+import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // dosfarma.com uses Magento 2 with Algolia InstantSearch for product search.
@@ -57,7 +57,7 @@ export class DosFarmaSearchScraper implements StoreSearchScraper {
       imageUrl: hit.image_url ?? null,
       productUrl: hit.url,
       isAvailable: true,
-      packageSize: extractPackageSize(hit.name),
+      ...parseProductQuantity(hit.name),
     }));
   }
 }

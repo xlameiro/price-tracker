@@ -27,6 +27,41 @@ export const ProductQuerySchema = z.object({
   q: z.string().max(200).optional(),
 });
 
+// Schema for tracking a product discovered via search results.
+// The client sends the chosen SearchResult data; the server creates/finds
+// the Product and PriceEntry, then upserts the TrackedProduct.
+// `siblings` carries the other store results from the same search so the
+// server can save price entries for all stores in one request.
+const SiblingResultSchema = z.object({
+  storeSlug: z.string().min(1).max(100),
+  price: z.number().positive(),
+  currency: z.string().length(3).default("EUR"),
+  productUrl: z.url().optional(),
+  packageSize: z.number().int().positive().optional(),
+  netWeight: z.number().positive().optional(),
+  netWeightUnit: z.enum(["g", "ml"]).optional(),
+  subscribePrice: z.number().positive().optional(),
+});
+
+export const TrackFromSearchSchema = z.object({
+  name: z.string().min(2).max(200),
+  storeSlug: z.string().min(1).max(100),
+  price: z.number().positive(),
+  currency: z.string().length(3).default("EUR"),
+  imageUrl: z.url().optional(),
+  productUrl: z.url().optional(),
+  packageSize: z.number().int().positive().optional(),
+  netWeight: z.number().positive().optional(),
+  netWeightUnit: z.enum(["g", "ml"]).optional(),
+  subscribePrice: z.number().positive().optional(),
+  ean: z
+    .string()
+    .regex(/^\d{8,13}$/)
+    .optional(),
+  siblings: z.array(SiblingResultSchema).max(50).optional(),
+});
+
 export type CreateProductInput = z.infer<typeof CreateProductSchema>;
 export type UpdateProductInput = z.infer<typeof UpdateProductSchema>;
 export type ProductQuery = z.infer<typeof ProductQuerySchema>;
+export type TrackFromSearchInput = z.infer<typeof TrackFromSearchSchema>;

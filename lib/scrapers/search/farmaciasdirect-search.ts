@@ -1,4 +1,4 @@
-import { extractPackageSize, fetchHtml } from "./scraper-utils";
+import { parseProductQuantity, fetchHtml } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 const BASE_URL = "https://www.farmaciasdirect.es";
@@ -47,7 +47,7 @@ export class FarmaciasDirectSearchScraper implements StoreSearchScraper {
             imageUrl: null,
             productUrl: `${BASE_URL}/products/${product.handle}`,
             isAvailable: true,
-            packageSize: extractPackageSize(variant.name),
+            ...parseProductQuantity(variant.name),
           } satisfies SearchResult,
         ];
       })

@@ -1,4 +1,4 @@
-import { extractPackageSize } from "./scraper-utils";
+import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // FarmaVázquez uses Doofinder as its search engine. The native PrestaShop search
@@ -60,7 +60,7 @@ export class FarmaVazquezSearchScraper implements StoreSearchScraper {
       imageUrl: item.image_link ?? null,
       productUrl: item.link,
       isAvailable: true,
-      packageSize: extractPackageSize(item.title),
+      ...parseProductQuantity(item.title),
     }));
   }
 }

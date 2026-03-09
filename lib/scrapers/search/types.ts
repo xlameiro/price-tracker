@@ -12,6 +12,10 @@ export interface SearchResult {
   isAvailable: boolean;
   /** Number of units in the pack (e.g. 44 diapers) — extracted from product name or known */
   packageSize?: number;
+  /** Net weight (grams) or volume (millilitres) of a single unit — used for €/100g or €/100ml comparison */
+  netWeight?: number;
+  /** Unit for netWeight: 'g' = grams, 'ml' = millilitres */
+  netWeightUnit?: "g" | "ml";
   /** EAN/GTIN barcode when the match was exact (EAN lookup) */
   ean?: string;
 }

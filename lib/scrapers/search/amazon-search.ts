@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
-import { browserClient, extractPackageSize } from "./scraper-utils";
+import type { ParsedQuantity } from "./scraper-utils";
+import { browserClient, parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // Metadata collected from the SERP before we fetch the real price from each PDP.
@@ -7,7 +8,7 @@ interface SerpCandidate {
   productName: string;
   productUrl: string;
   imageUrl: string | null;
-  packageSize: number | undefined;
+  parsedQty: ParsedQuantity;
 }
 
 const PRICE_RE = /^(\d{1,6})[,.](\d{2})/;
@@ -73,9 +74,7 @@ function parseSnsPrice(
 // The PDP shows both prices even without a session:
 //   • .priceToPay → standard single-purchase checkout price
 //   • #sns-price / SNS widget  → recurring subscription price (lower)
-async function fetchPdpPrice(
-  productUrl: string,
-): Promise<{
+async function fetchPdpPrice(productUrl: string): Promise<{
   price: number;
   subscribePrice?: number;
   isAvailable: boolean;
@@ -182,7 +181,7 @@ export class AmazonSearchScraper implements StoreSearchScraper {
           productName,
           productUrl,
           imageUrl: imageUrl ?? null,
-          packageSize: extractPackageSize(productName) ?? undefined,
+          parsedQty: parseProductQuantity(productName),
         });
       });
 
@@ -213,7 +212,7 @@ export class AmazonSearchScraper implements StoreSearchScraper {
           imageUrl: candidate.imageUrl,
           productUrl: candidate.productUrl,
           isAvailable: pdp.isAvailable,
-          packageSize: candidate.packageSize,
+          ...candidate.parsedQty,
         });
       }
 

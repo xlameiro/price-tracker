@@ -1,4 +1,10 @@
-import { cn, formatCurrency, formatDate, truncate } from "@/lib/utils";
+import {
+  cn,
+  formatCurrency,
+  formatDate,
+  getImageSrc,
+  truncate,
+} from "@/lib/utils";
 import { describe, expect, it } from "vitest";
 
 describe("cn", () => {
@@ -81,5 +87,36 @@ describe("truncate", () => {
 
   it("handles empty strings", () => {
     expect(truncate("", 5)).toBe("");
+  });
+});
+
+describe("getImageSrc", () => {
+  it("should mark static.carrefour.es as unoptimized for direct browser fetch", () => {
+    const url =
+      "https://static.carrefour.es/hd_350x_/img_pim_food/538634_00_1.jpg";
+    const { src, unoptimized } = getImageSrc(url);
+    expect(src).toBe(url);
+    expect(unoptimized).toBe(true);
+  });
+
+  it("should pass Amazon images through Next.js optimization", () => {
+    const url =
+      "https://m.media-amazon.com/images/I/71GZPE5IbBL._AC_UL320_.jpg";
+    const { src, unoptimized } = getImageSrc(url);
+    expect(src).toBe(url);
+    expect(unoptimized).toBe(false);
+  });
+
+  it("should pass arbitrary external URLs through Next.js optimization", () => {
+    const url = "https://cdn.example.com/product.jpg";
+    const { src, unoptimized } = getImageSrc(url);
+    expect(src).toBe(url);
+    expect(unoptimized).toBe(false);
+  });
+
+  it("should handle invalid URLs without throwing", () => {
+    const { src, unoptimized } = getImageSrc("not-a-url");
+    expect(src).toBe("not-a-url");
+    expect(unoptimized).toBe(false);
   });
 });

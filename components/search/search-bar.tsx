@@ -1,5 +1,6 @@
 "use client";
 
+import { useDebounce } from "@/hooks/use-debounce";
 import { ROUTES } from "@/lib/constants";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -17,6 +18,13 @@ export function SearchBar({
   const [query, setQuery] = useState(initialQuery);
   const inputRef = useRef<HTMLInputElement>(null);
   const isLarge = size === "large";
+
+  const debouncedSearch = useDebounce((value: unknown) => {
+    const trimmed = String(value).trim();
+    if (trimmed.length >= 3) {
+      router.replace(`${ROUTES.search}?q=${encodeURIComponent(trimmed)}`);
+    }
+  }, 400);
 
   function submitSearch() {
     const trimmed = query.trim();
@@ -44,11 +52,14 @@ export function SearchBar({
           ref={inputRef}
           type="search"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            const { value } = event.target;
+            setQuery(value);
+            debouncedSearch(value);
+          }}
           placeholder='p.ej. "Dodot Sensitive talla 5"'
           autoComplete="off"
-          minLength={2}
-          required
+          minLength={3}
           aria-required="true"
           className={`flex-1 rounded-lg border border-foreground/20 bg-background px-4 text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/30 ${isLarge ? "h-14 text-base" : "h-10 text-sm"}`}
         />

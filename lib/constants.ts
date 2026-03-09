@@ -1,7 +1,10 @@
-export const APP_NAME = "Comparador de Pañales";
+export const APP_NAME = "Comparador de Precios";
 export const APP_DESCRIPTION =
-  "Compara precios de pañales en las principales tiendas y supermercados de España. Encuentra el precio más barato por unidad.";
+  "Compara precios en supermercados, farmacias y tiendas online de España. Encuentra el mejor precio por unidad de cualquier producto.";
 export const APP_VERSION = "0.1.0";
+
+// Keep in sync with the number of active scrapers in lib/scrapers/search/index.ts
+export const STORE_COUNT = 23;
 
 export const SITE_URL =
   process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -26,6 +29,7 @@ export const API_ROUTES = {
   products: "/api/products",
   prices: "/api/prices",
   tracked: "/api/tracked",
+  trackDiscover: "/api/tracked/discover",
   alerts: "/api/alerts",
   stores: "/api/stores",
   scrape: "/api/scrape",
@@ -141,7 +145,7 @@ export const STORES = [
 
 export type StoreSlug = (typeof STORES)[number]["slug"];
 
-// Dodot Sensitive size variants
+// Dodot Sensitive size variants (T3–T6, all seeded in DB)
 export const DODOT_PRODUCTS = [
   {
     slug: "dodot-sensitive-t5",
@@ -150,3 +154,19 @@ export const DODOT_PRODUCTS = [
     kgRange: "11-16 kg",
   },
 ] as const;
+
+export type DodotSlug = (typeof DODOT_PRODUCTS)[number]["slug"];
+
+// Maps a product category (lowercase) to the label used for per-unit price display
+export const CATEGORY_UNIT_LABELS: Readonly<Record<string, string>> = {
+  pañales: "pañal",
+  leche: "ml",
+  agua: "L",
+  aceite: "ml",
+  refrescos: "ml",
+  conservas: "g",
+  cereales: "g",
+  pasta: "g",
+  arroz: "g",
+  lácteos: "ml",
+};

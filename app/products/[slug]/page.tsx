@@ -1,8 +1,14 @@
-import { PriceRankingTable } from "@/components/products/price-ranking-table";
+import type { PriceRow } from "@/components/products/price-ranking-table";
+import {
+  comparablePrice,
+  inferComparisonMode,
+  PriceRankingTable,
+} from "@/components/products/price-ranking-table";
 import { RefreshPricesButton } from "@/components/products/refresh-prices-button";
 import { SkipLink } from "@/components/skip-link";
 import { APP_NAME, DODOT_PRODUCTS, ROUTES } from "@/lib/constants";
 import { db } from "@/lib/db";
+import { getUnitLabel } from "@/lib/utils";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -58,6 +64,8 @@ export default async function ProductPage({
       price: true,
       subscribePrice: true,
       packageSize: true,
+      netWeight: true,
+      netWeightUnit: true,
       shippingCost: true,
       url: true,
       scrapedAt: true,
@@ -73,8 +81,7 @@ export default async function ProductPage({
     },
   });
 
-  // Map Prisma Decimal → number for the component
-  const rows = latestPrices.map((entry) => ({
+  const rows: PriceRow[] = latestPrices.map((entry) => ({
     storeId: entry.store.id,
     storeName: entry.store.name,
     storeUrl: entry.store.websiteUrl,
@@ -85,21 +92,32 @@ export default async function ProductPage({
     price: Number(entry.price),
     subscribePrice: entry.subscribePrice ? Number(entry.subscribePrice) : null,
     packageSize: entry.packageSize,
+    netWeight: entry.netWeight ? Number(entry.netWeight) : null,
+    netWeightUnit: (entry.netWeightUnit as "g" | "ml" | null) ?? null,
     shippingCost: entry.shippingCost ? Number(entry.shippingCost) : null,
     productUrl: entry.url,
     scrapedAt: entry.scrapedAt,
   }));
 
-  // Lowest unit price for the summary line
-  const lowestUnitPrice =
-    rows
-      .filter((r) => r.packageSize !== null && r.packageSize > 0)
-      // Use subscribePrice when available — it's the best real price for the customer
-      .map((r) => (r.subscribePrice ?? r.price) / r.packageSize!)
-      .sort((a, b) => a - b)[0] ?? null;
-
   // Extra metadata from DODOT_PRODUCTS constant (size, kg range)
   const dodotMeta = DODOT_PRODUCTS.find((p) => p.slug === product.slug);
+  const unitLabel = getUnitLabel(product.category);
+
+  // Lowest comparable price for the summary hero line, using the same
+  // comparison mode as the ranking table.
+  const compMode = inferComparisonMode(rows);
+  const lowestUnitPrice =
+    rows
+      .map((r) => comparablePrice(r, compMode))
+      .filter((p): p is number => p !== null)
+      .sort((a, b) => a - b)[0] ?? null;
+
+  const HERO_SUFFIX: Record<typeof compMode, string> = {
+    per100g: "por 100g",
+    per100ml: "por 100ml",
+    perUnit: `por ${unitLabel}`,
+    rawPrice: "",
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -168,11 +186,11 @@ export default async function ProductPage({
                 {new Intl.NumberFormat("es-ES", {
                   style: "currency",
                   currency: "EUR",
-                  minimumFractionDigits: 3,
-                  maximumFractionDigits: 3,
+                  minimumFractionDigits: compMode === "rawPrice" ? 2 : 3,
+                  maximumFractionDigits: compMode === "rawPrice" ? 2 : 3,
                 }).format(lowestUnitPrice)}
-              </span>{" "}
-              por pañal
+              </span>
+              {HERO_SUFFIX[compMode] ? ` ${HERO_SUFFIX[compMode]}` : ""}
             </p>
           )}
         </div>

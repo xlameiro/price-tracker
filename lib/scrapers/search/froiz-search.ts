@@ -1,4 +1,4 @@
-import { extractPackageSize } from "./scraper-utils";
+import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // tienda.froiz.com (old domain) is dead. Results come from the Empathy.co search API.
@@ -61,7 +61,7 @@ export class FroizSearchScraper implements StoreSearchScraper {
             imageUrl: item.imageUrl ?? null,
             productUrl: `https://supermercado.froiz.com/product/${slug}`,
             isAvailable: true,
-            packageSize: extractPackageSize(productName),
+            ...parseProductQuantity(productName),
           } satisfies SearchResult,
         ];
       });

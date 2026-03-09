@@ -1,4 +1,4 @@
-import { extractPackageSize } from "./scraper-utils";
+import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // Search-only public key from Aldi's frontend bundle (safe to embed).
@@ -89,7 +89,7 @@ export class AldiSearchScraper implements StoreSearchScraper {
           imageUrl: hit.productPicture ?? null,
           productUrl,
           isAvailable: true, // salesPrice present → in-store stock; "NONE" only means no online cart
-          packageSize: extractPackageSize(productName),
+          ...parseProductQuantity(productName),
         });
       }
     }

@@ -1,4 +1,4 @@
-import { extractPackageSize } from "./scraper-utils";
+import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // Nappy uses PrestaShop + IQITsearch module. Requesting the endpoint with
@@ -53,7 +53,7 @@ export class NappySearchScraper implements StoreSearchScraper {
             imageUrl,
             productUrl,
             isAvailable: true,
-            packageSize: extractPackageSize(productName),
+            ...parseProductQuantity(productName),
           } satisfies SearchResult,
         ];
       });

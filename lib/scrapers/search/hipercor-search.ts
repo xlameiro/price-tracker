@@ -1,5 +1,5 @@
 import {
-  extractPackageSize,
+  parseProductQuantity,
   fetchHtml,
   parseSpanishPrice,
 } from "./scraper-utils";
@@ -116,7 +116,7 @@ export class HipercorSearchScraper implements StoreSearchScraper {
         imageUrl: product.image ?? null,
         productUrl,
         isAvailable: true,
-        packageSize: extractPackageSize(product.description),
+        ...parseProductQuantity(product.description),
       });
 
       if (results.length >= 5) break;

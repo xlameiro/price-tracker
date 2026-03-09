@@ -1,4 +1,4 @@
-import { extractPackageSize } from "./scraper-utils";
+import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // viandvi.com is gone. The live store is viandvi.es (WooCommerce).
@@ -62,7 +62,7 @@ export class ViandviSearchScraper implements StoreSearchScraper {
             // enables "Out of Stock Visibility". Read the field if
             // present; default to true (not returned = in stock).
             isAvailable: item.is_in_stock !== false,
-            packageSize: extractPackageSize(productName),
+            ...parseProductQuantity(productName),
           } satisfies SearchResult,
         ];
       });

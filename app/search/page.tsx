@@ -1,7 +1,7 @@
+import { auth } from "@/auth";
+import { ProgressiveSearchResults } from "@/components/search/progressive-search-results";
 import { SearchBar } from "@/components/search/search-bar";
-import { SearchResults } from "@/components/search/search-results";
 import { APP_NAME, ROUTES } from "@/lib/constants";
-import { searchAllStores } from "@/lib/scrapers/search";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -25,9 +25,9 @@ export async function generateMetadata({
 export default async function SearchPage({ searchParams }: SearchPageProps) {
   const { q } = await searchParams;
   const query = q?.trim() ?? "";
-  const hasQuery = query.length >= 2;
+  const hasQuery = query.length >= 3;
 
-  const results = hasQuery ? await searchAllStores(query) : [];
+  const session = await auth();
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -62,7 +62,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           <SearchBar initialQuery={query} />
         </div>
 
-        {hasQuery && <SearchResults results={results} query={query} />}
+        {hasQuery && (
+          <ProgressiveSearchResults query={query} isAuthenticated={!!session} />
+        )}
 
         {!hasQuery && (
           <p className="text-sm text-foreground/50">

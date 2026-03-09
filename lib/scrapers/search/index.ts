@@ -90,3 +90,32 @@ export async function searchAllStores(query: string): Promise<SearchResult[]> {
 
   return filtered.sort((a, b) => a.price - b.price);
 }
+
+/**
+ * Streaming variant: resolves EANs once, then runs all scrapers in parallel,
+ * calling `onBatch` as each scraper returns relevant results (allowing progressive UI).
+ * Scraper errors are swallowed — they never block other scrapers.
+ */
+export async function streamSearchAllStores(
+  query: string,
+  onBatch: (results: SearchResult[]) => void,
+): Promise<void> {
+  const { eans } = await resolveProductEans(query);
+  const ctx = { query, eans };
+
+  await Promise.allSettled(
+    activeScrapers.map(async (scraper) => {
+      try {
+        const results = await scraper.search(ctx);
+        const relevant = results.filter(
+          (r) => r.ean !== undefined || isRelevant(r.productName, query),
+        );
+        if (relevant.length > 0) {
+          onBatch(relevant);
+        }
+      } catch {
+        // individual scraper errors silently discarded
+      }
+    }),
+  );
+}

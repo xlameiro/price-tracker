@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 
-interface PriceRow {
+export interface PriceRow {
   storeId: string;
   storeName: string;
   storeUrl: string;
@@ -9,6 +9,8 @@ interface PriceRow {
   price: number;
   subscribePrice: number | null;
   packageSize: number | null;
+  netWeight: number | null;
+  netWeightUnit: "g" | "ml" | null;
   shippingCost: number | null;
   productUrl: string | null;
   scrapedAt: Date;
@@ -17,6 +19,95 @@ interface PriceRow {
 interface PriceRankingTableProps {
   rows: PriceRow[];
 }
+
+// ---------------------------------------------------------------------------
+// Comparison engine
+// ---------------------------------------------------------------------------
+
+type ComparisonMode = "per100g" | "per100ml" | "perUnit" | "rawPrice";
+
+/**
+ * Detect the best comparison unit from the available row data.
+ * Uses majority vote: picks the mode that covers the most rows.
+ * This prevents a small number of mis-parsed entries from overriding
+ * the correct mode used by the majority of stores.
+ */
+export function inferComparisonMode(rows: PriceRow[]): ComparisonMode {
+  let gCount = 0;
+  let mlCount = 0;
+  let unitOnlyCount = 0;
+  for (const row of rows) {
+    if (row.netWeightUnit === "g") gCount++;
+    else if (row.netWeightUnit === "ml") mlCount++;
+    else if (row.packageSize !== null) unitOnlyCount++;
+  }
+  const max = Math.max(gCount, mlCount, unitOnlyCount);
+  if (max === 0) return "rawPrice";
+  if (gCount === max) return "per100g";
+  if (mlCount === max) return "per100ml";
+  return "perUnit";
+}
+
+/**
+ * Comparable price for a row given a mode, normalised to a common basis.
+ * Returns null when the row lacks the data needed for the mode (goes to bottom).
+ */
+export function comparablePrice(
+  row: PriceRow,
+  mode: ComparisonMode,
+): number | null {
+  const effective = row.subscribePrice ?? row.price;
+  switch (mode) {
+    case "per100g":
+    case "per100ml": {
+      if (row.netWeight === null || row.netWeight <= 0) return null;
+      const totalWeight = (row.packageSize ?? 1) * row.netWeight;
+      return (effective / totalWeight) * 100;
+    }
+    case "perUnit":
+      // Return null when packageSize is unknown — dividing by 1 would show the
+      // full pack price as if it were a per-unit price, which is misleading.
+      if (row.packageSize === null) return null;
+      return effective / row.packageSize;
+    case "rawPrice":
+      return effective;
+  }
+}
+
+const COMPARISON_HEADER: Record<ComparisonMode, string> = {
+  per100g: "€/100g",
+  per100ml: "€/100ml",
+  perUnit: "€/ud",
+  rawPrice: "€/ud",
+};
+
+function formatWeight(value: number, unit: "g" | "ml"): string {
+  if (unit === "g") {
+    if (value >= 1000) {
+      return `${new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 }).format(value / 1000)} kg`;
+    }
+    return `${value}g`;
+  }
+  if (value >= 1000) {
+    return `${new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 }).format(value / 1000)} L`;
+  }
+  return `${value} ml`;
+}
+
+function quantityLabel(row: PriceRow): string {
+  if (row.netWeight !== null && row.netWeightUnit !== null) {
+    const weightStr = formatWeight(row.netWeight, row.netWeightUnit);
+    return row.packageSize !== null && row.packageSize > 1
+      ? `${row.packageSize}×${weightStr}`
+      : weightStr;
+  }
+  if (row.packageSize !== null) {
+    return `${row.packageSize} uds`;
+  }
+  return "—";
+}
+
+// ---------------------------------------------------------------------------
 
 function formatEUR(value: number): string {
   return new Intl.NumberFormat("es-ES", {
@@ -62,18 +153,16 @@ export function PriceRankingTable({ rows }: Readonly<PriceRankingTableProps>) {
     );
   }
 
-  // Sort by best unit price ascending (subscribePrice beats regular price);
-  // rows without packageSize go after those with it
+  // Sort: comparable rows ascending, then unresolvable rows sorted by raw price.
+  const mode = inferComparisonMode(rows);
   const sorted = [...rows].sort((a, b) => {
-    const bestA = a.subscribePrice ?? a.price;
-    const bestB = b.subscribePrice ?? b.price;
-    const unitA = a.packageSize ? bestA / a.packageSize : null;
-    const unitB = b.packageSize ? bestB / b.packageSize : null;
-
-    if (unitA !== null && unitB !== null) return unitA - unitB;
-    if (unitA !== null) return -1;
-    if (unitB !== null) return 1;
-    return bestA - bestB;
+    const cA = comparablePrice(a, mode);
+    const cB = comparablePrice(b, mode);
+    if (cA !== null && cB !== null) return cA - cB;
+    if (cA === null && cB === null) {
+      return (a.subscribePrice ?? a.price) - (b.subscribePrice ?? b.price);
+    }
+    return cA === null ? 1 : -1;
   });
 
   return (
@@ -94,10 +183,10 @@ export function PriceRankingTable({ rows }: Readonly<PriceRankingTableProps>) {
               Recurrente
             </th>
             <th scope="col" className="px-4 py-3 text-right font-semibold">
-              Uds
+              Cantidad
             </th>
             <th scope="col" className="px-4 py-3 text-right font-semibold">
-              Precio/ud
+              {COMPARISON_HEADER[mode]}
             </th>
             <th
               scope="col"
@@ -120,10 +209,7 @@ export function PriceRankingTable({ rows }: Readonly<PriceRankingTableProps>) {
         </thead>
         <tbody className="divide-y divide-foreground/5">
           {sorted.map((row, index) => {
-            const bestPrice = row.subscribePrice ?? row.price;
-            const unitPrice = row.packageSize
-              ? bestPrice / row.packageSize
-              : null;
+            const cPrice = comparablePrice(row, mode);
             const isFirst = index === 0;
 
             return (
@@ -167,25 +253,23 @@ export function PriceRankingTable({ rows }: Readonly<PriceRankingTableProps>) {
                     <span className="text-foreground/30">—</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-right tabular-nums text-foreground/70">
-                  {row.packageSize ?? (
-                    <span className="text-foreground/40">—</span>
-                  )}
+                <td className="px-4 py-3 text-right tabular-nums font-mono text-xs text-foreground/70">
+                  {quantityLabel(row)}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">
-                  {unitPrice !== null ? (
-                    <span
-                      className={
-                        isFirst
-                          ? "font-bold text-green-700 dark:text-green-400"
-                          : "font-medium"
-                      }
-                    >
-                      {formatEUR(unitPrice)}
-                    </span>
-                  ) : (
-                    <span className="text-foreground/40">—</span>
-                  )}
+                  <span
+                    className={
+                      isFirst
+                        ? "font-bold text-green-700 dark:text-green-400"
+                        : "font-medium"
+                    }
+                  >
+                    {cPrice !== null ? (
+                      formatEUR(cPrice)
+                    ) : (
+                      <span className="font-normal text-foreground/40">—</span>
+                    )}
+                  </span>
                 </td>
                 <td className="hidden px-4 py-3 text-center sm:table-cell">
                   {shippingLabel(

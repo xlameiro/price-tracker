@@ -1,3 +1,4 @@
+import { getImageSrc } from "@/lib/utils";
 import type { Prisma } from "@prisma/client";
 import Image from "next/image";
 
@@ -32,7 +33,7 @@ export function ProductCard({ product }: Readonly<ProductCardProps>) {
       {imageUrl ? (
         <div className="relative h-40 w-full bg-foreground/5">
           <Image
-            src={imageUrl}
+            {...getImageSrc(imageUrl)}
             alt={`Image of ${name}`}
             fill
             className="object-contain p-2"

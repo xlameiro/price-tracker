@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { extractPackageSize, fetchHtml } from "./scraper-utils";
+import { parseProductQuantity, fetchHtml } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 export class PromoFarmaSearchScraper implements StoreSearchScraper {
@@ -48,7 +48,7 @@ export class PromoFarmaSearchScraper implements StoreSearchScraper {
         imageUrl,
         productUrl,
         isAvailable: true,
-        packageSize: extractPackageSize(productName),
+        ...parseProductQuantity(productName),
       });
     });
 

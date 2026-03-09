@@ -1,13 +1,8 @@
 import { auth } from "@/auth";
-import { ProductCatalogCard } from "@/components/products/product-catalog-card";
+import { UntrackButton } from "@/components/dashboard/untrack-button";
+import { SearchBar } from "@/components/search/search-bar";
 import { SkipLink } from "@/components/skip-link";
-import {
-  APP_DESCRIPTION,
-  APP_NAME,
-  DODOT_PRODUCTS,
-  ROUTES,
-  STORES,
-} from "@/lib/constants";
+import { APP_DESCRIPTION, APP_NAME, ROUTES, STORES } from "@/lib/constants";
 import { db } from "@/lib/db";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -20,40 +15,24 @@ export const metadata: Metadata = {
 export default async function Home() {
   const session = await auth();
 
-  // Fetch latest price entries per store per product so we can compute
-  // the lowest unit price to display on each card
-  const products = await db.product.findMany({
-    where: { isActive: true },
-    select: {
-      id: true,
-      slug: true,
-      priceEntries: {
-        where: { isAvailable: true },
-        orderBy: { scrapedAt: "desc" },
-        distinct: ["storeId"],
-        select: {
-          price: true,
-          packageSize: true,
+  const trackedProducts = session?.user?.id
+    ? await db.trackedProduct.findMany({
+        where: { userId: session.user.id },
+        orderBy: { createdAt: "desc" },
+        include: {
+          product: {
+            include: {
+              priceEntries: {
+                where: { isAvailable: true },
+                orderBy: { scrapedAt: "desc" },
+                distinct: ["storeId"],
+                include: { store: { select: { name: true } } },
+              },
+            },
+          },
         },
-      },
-    },
-  });
-
-  // Build a lookup: slug → { lowestUnitPrice, storeCount }
-  const productStats = new Map<
-    string,
-    { lowestUnitPrice: number | null; storeCount: number }
-  >();
-  for (const product of products) {
-    const unitPrices = product.priceEntries
-      .filter((e) => e.packageSize !== null && e.packageSize > 0)
-      .map((e) => Number(e.price) / e.packageSize!);
-
-    productStats.set(product.slug, {
-      lowestUnitPrice: unitPrices.length > 0 ? Math.min(...unitPrices) : null,
-      storeCount: product.priceEntries.length,
-    });
-  }
+      })
+    : [];
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -103,33 +82,104 @@ export default async function Home() {
         {/* Hero */}
         <section className="mx-auto flex max-w-5xl flex-col items-center px-6 py-14 text-center">
           <h1 className="max-w-2xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-            Compara precios de pañales
+            Busca el mejor precio
           </h1>
           <p className="mt-4 max-w-xl text-base text-foreground/60">
             {APP_DESCRIPTION}
           </p>
-        </section>
-
-        {/* Product catalog */}
-        <section className="mx-auto max-w-5xl px-6 pb-16">
-          <div className="flex flex-col items-center gap-4">
-            {DODOT_PRODUCTS.map((product) => {
-              const stats = productStats.get(product.slug);
-              return (
-                <div key={product.slug} className="w-full max-w-sm">
-                  <ProductCatalogCard
-                    slug={product.slug}
-                    name={product.name}
-                    size={product.size}
-                    kgRange={product.kgRange}
-                    lowestUnitPrice={stats?.lowestUnitPrice ?? null}
-                    storeCount={stats?.storeCount ?? 0}
-                  />
-                </div>
-              );
-            })}
+          <div className="mt-6 w-full max-w-xl">
+            <SearchBar size="large" />
           </div>
         </section>
+
+        {/* Tracked products — only for authenticated users */}
+        {session && (
+          <section
+            aria-labelledby="tracked-heading"
+            className="mx-auto max-w-5xl px-6 pb-16"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 id="tracked-heading" className="text-base font-semibold">
+                Mis productos
+              </h2>
+              <Link
+                href={ROUTES.search}
+                className="text-sm text-foreground/60 hover:text-foreground"
+              >
+                Añadir producto →
+              </Link>
+            </div>
+            {trackedProducts.length === 0 ? (
+              <p className="text-sm text-foreground/50">
+                Aún no sigues ningún producto.{" "}
+                <Link href={ROUTES.search} className="underline">
+                  Busca uno
+                </Link>{" "}
+                para empezar.
+              </p>
+            ) : (
+              <ul
+                role="list"
+                className="divide-y divide-foreground/10 rounded-xl border border-foreground/10"
+              >
+                {trackedProducts.map(({ id, product }) => {
+                  const entries = product.priceEntries;
+                  const bestEntry = entries.reduce<
+                    (typeof entries)[number] | null
+                  >((best, entry) => {
+                    if (!best) return entry;
+                    const currentBestPrice = best.subscribePrice
+                      ? Number(best.subscribePrice)
+                      : Number(best.price);
+                    const entryPrice = entry.subscribePrice
+                      ? Number(entry.subscribePrice)
+                      : Number(entry.price);
+                    return entryPrice < currentBestPrice ? entry : best;
+                  }, null);
+
+                  return (
+                    <li
+                      key={id}
+                      className="flex items-center justify-between px-4 hover:bg-foreground/5"
+                    >
+                      <Link
+                        href={ROUTES.productDetail(product.slug)}
+                        className="flex min-w-0 flex-1 items-center justify-between py-4"
+                      >
+                        <div>
+                          <p className="font-medium">{product.name}</p>
+                          {entries.length > 0 && (
+                            <p className="text-sm text-foreground/50">
+                              {entries.length}{" "}
+                              {entries.length === 1 ? "tienda" : "tiendas"}
+                            </p>
+                          )}
+                        </div>
+                        {bestEntry && (
+                          <div className="text-right">
+                            <p className="font-semibold text-green-700 dark:text-green-400">
+                              {Number(
+                                bestEntry.subscribePrice ?? bestEntry.price,
+                              ).toFixed(2)}{" "}
+                              €
+                            </p>
+                            <p className="text-xs text-foreground/50">
+                              {bestEntry.store.name}
+                            </p>
+                          </div>
+                        )}
+                      </Link>
+                      <UntrackButton
+                        productId={product.id}
+                        productName={product.name}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        )}
 
         {/* Stores section */}
         <section
@@ -163,8 +213,8 @@ export default async function Home() {
               Recibe alertas de bajada de precio
             </h2>
             <p className="mb-8 text-base text-foreground/60">
-              Crea una cuenta gratuita para que te avisemos cuando un pañal baje
-              al precio que tú elijas.
+              Crea una cuenta gratuita para que te avisemos cuando un producto
+              baje al precio que tú elijas.
             </p>
             <Link
               href={ROUTES.signUp}

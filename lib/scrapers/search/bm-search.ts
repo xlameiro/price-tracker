@@ -1,4 +1,4 @@
-import { extractPackageSize } from "./scraper-utils";
+import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 const BASE_URL = "https://www.online.bmsupermercados.es";
@@ -29,8 +29,10 @@ function bmProductToResult(
 ): SearchResult | null {
   const productName = product.productData?.name?.trim();
   if (!productName) return null;
-  const price = product.priceData?.prices?.[0]?.value?.centAmount;
-  if (!Number.isFinite(price) || price <= 0) return null;
+  // BM uses Commercetools: price is in euro-cents, must divide by 100
+  const centAmount = product.priceData?.prices?.[0]?.value?.centAmount;
+  if (!Number.isFinite(centAmount) || centAmount <= 0) return null;
+  const price = centAmount / 100;
   return {
     storeSlug,
     storeName,
@@ -40,7 +42,7 @@ function bmProductToResult(
     imageUrl: product.productData?.imageURL ?? null,
     productUrl: product.productData?.url ?? "",
     isAvailable: true,
-    packageSize: extractPackageSize(productName),
+    ...parseProductQuantity(productName),
   };
 }
 

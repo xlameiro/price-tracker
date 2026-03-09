@@ -1,5 +1,5 @@
 import {
-  extractPackageSize,
+  parseProductQuantity,
   fetchHtml,
   parseSpanishPrice,
 } from "./scraper-utils";
@@ -95,7 +95,7 @@ function toSearchResult(
     imageUrl: product.image ?? null,
     productUrl,
     isAvailable: true,
-    packageSize: extractPackageSize(product.description),
+    ...parseProductQuantity(product.description),
   };
 }
 

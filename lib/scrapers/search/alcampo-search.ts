@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { browserClient, extractPackageSize } from "./scraper-utils";
+import { browserClient, parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 const BASE = "https://www.compraonline.alcampo.es";
@@ -62,7 +62,7 @@ function entityToResult(
     imageUrl: entity.image?.src ?? null,
     productUrl,
     isAvailable: true,
-    packageSize: extractPackageSize(entity.name),
+    ...parseProductQuantity(entity.name),
   };
 }
 

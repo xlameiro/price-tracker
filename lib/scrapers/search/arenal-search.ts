@@ -1,4 +1,4 @@
-import { extractPackageSize } from "./scraper-utils";
+import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 type MagentoProductItem = {
@@ -77,7 +77,7 @@ export class ArenalSearchScraper implements StoreSearchScraper {
               imageUrl: item.small_image?.url ?? null,
               productUrl: `https://www.arenal.com/${item.url_key}`,
               isAvailable: true,
-              packageSize: extractPackageSize(item.name),
+              ...parseProductQuantity(item.name),
             } satisfies SearchResult,
           ];
         })

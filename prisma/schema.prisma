@@ -131,6 +131,10 @@ model PriceEntry {
   isAvailable  Boolean     @default(true)
   // Number of units in the pack (e.g. 44 diapers per pack)
   packageSize  Int?
+  // Net weight (grams) or volume (millilitres) of a single unit — used for €/100g or €/100ml comparison
+  netWeight     Decimal?  @db.Decimal(10, 2)
+  // Unit of netWeight: "g" for grams, "ml" for millilitres. Null if unit count only.
+  netWeightUnit String?
   // Recurring / Subscribe & Save price when available (always lower than price)
   subscribePrice Decimal?  @db.Decimal(10, 2)
   // Shipping cost for this specific purchase (0 = free)

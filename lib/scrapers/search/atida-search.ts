@@ -1,4 +1,4 @@
-import { extractPackageSize } from "./scraper-utils";
+import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // atida.com (previously MiFarma) uses Magento 2 with Algolia InstantSearch.
@@ -56,7 +56,7 @@ export class AtidaSearchScraper implements StoreSearchScraper {
       imageUrl: hit.image_url ?? null,
       productUrl: hit.url,
       isAvailable: true,
-      packageSize: extractPackageSize(hit.name),
+      ...parseProductQuantity(hit.name),
     }));
   }
 }

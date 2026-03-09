@@ -1,4 +1,4 @@
-import { browserClient, extractPackageSize } from "./scraper-utils";
+import { browserClient, parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // Mercadona exposes two official-looking JSON APIs used by tienda.mercadona.es:
@@ -55,7 +55,7 @@ function toSearchResult(
     imageUrl,
     productUrl: `https://tienda.mercadona.es/product/${encodeURIComponent(slug)}`,
     isAvailable: true,
-    packageSize: extractPackageSize(name),
+    ...parseProductQuantity(name),
     ...(ean && { ean }),
   };
 }

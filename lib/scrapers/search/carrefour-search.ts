@@ -1,4 +1,4 @@
-import { extractPackageSize } from "./scraper-utils";
+import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // Carrefour uses Empathy.co as its search engine. The API is publicly
@@ -44,6 +44,14 @@ export class CarrefourSearchScraper implements StoreSearchScraper {
         if (!productName || !price) return [];
 
         const urlPath = item.urls?.food ?? item.urls?.nonFood ?? "";
+        // Empathy sometimes returns a category listing URL (ends with /c).
+        // Fall back to the search page so the link is always product-specific.
+        const productUrl =
+          urlPath && !urlPath.endsWith("/c")
+            ? `https://www.carrefour.es${urlPath}`
+            : `https://www.carrefour.es/supermercado/buscar/q=${encodeURIComponent(productName)}`;
+        // static.carrefour.es is behind Cloudflare Bot Management.
+        // Browser <img> fetches are allowed — use unoptimized: true via getImageSrc.
         const imageUrl =
           item.image_path?.food ?? item.image_path?.nonFood ?? null;
 
@@ -55,9 +63,9 @@ export class CarrefourSearchScraper implements StoreSearchScraper {
             price,
             currency: "EUR",
             imageUrl,
-            productUrl: `https://www.carrefour.es${urlPath}`,
+            productUrl,
             isAvailable: true,
-            packageSize: extractPackageSize(productName),
+            ...parseProductQuantity(productName),
           } satisfies SearchResult,
         ];
       });
