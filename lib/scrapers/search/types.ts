@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export interface SearchResult {
   storeSlug: string;
   storeName: string;
@@ -18,6 +20,37 @@ export interface SearchResult {
   netWeightUnit?: "g" | "ml";
   /** EAN/GTIN barcode when the match was exact (EAN lookup) */
   ean?: string;
+}
+
+/**
+ * Runtime Zod schema matching `SearchResult`.
+ * Used to validate and filter scraper output at the aggregator boundary —
+ * rejects entries with NaN prices, empty names, or structurally invalid fields
+ * before they reach the UI.
+ */
+export const SearchResultSchema = z.object({
+  storeSlug: z.string().min(1),
+  storeName: z.string().min(1),
+  productName: z.string().min(1),
+  price: z.number().gt(0),
+  subscribePrice: z.number().gt(0).optional(),
+  currency: z.string().min(1),
+  imageUrl: z.string().nullable(),
+  productUrl: z.string().min(1),
+  isAvailable: z.boolean(),
+  packageSize: z.number().int().gt(0).optional(),
+  netWeight: z.number().gt(0).optional(),
+  netWeightUnit: z.enum(["g", "ml"]).optional(),
+  ean: z.string().optional(),
+});
+
+/**
+ * Filter an array of raw scraper results to only valid `SearchResult` entries.
+ * Invalid entries (NaN price, empty name, etc.) are silently dropped — they are
+ * almost always scraper parsing artefacts, not user-visible errors.
+ */
+export function validateSearchResults(raw: SearchResult[]): SearchResult[] {
+  return raw.filter((item) => SearchResultSchema.safeParse(item).success);
 }
 
 /**

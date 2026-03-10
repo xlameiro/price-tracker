@@ -1,4 +1,5 @@
 import { ROUTES } from "@/lib/constants";
+import { getUnitLabel } from "@/lib/utils";
 import Link from "next/link";
 
 interface ProductCatalogCardProps {
@@ -8,6 +9,8 @@ interface ProductCatalogCardProps {
   kgRange: string;
   lowestUnitPrice: number | null;
   storeCount: number;
+  /** Product category used to derive the per-unit label (e.g. "pañales" → "pañal") */
+  category?: string | null;
 }
 
 export function ProductCatalogCard({
@@ -17,7 +20,9 @@ export function ProductCatalogCard({
   kgRange,
   lowestUnitPrice,
   storeCount,
+  category,
 }: Readonly<ProductCatalogCardProps>) {
+  const unitLabel = getUnitLabel(category);
   return (
     <Link
       href={ROUTES.productDetail(slug)}
@@ -46,7 +51,7 @@ export function ProductCatalogCard({
                 maximumFractionDigits: 3,
               }).format(lowestUnitPrice)}
             </p>
-            <p className="text-xs text-foreground/50">por pañal</p>
+            <p className="text-xs text-foreground/50">por {unitLabel}</p>
           </div>
         ) : (
           <p className="text-sm text-foreground/40">Sin datos aún</p>

@@ -18,10 +18,18 @@ export const browserClient = new Impit({
 });
 
 /**
+ * Legacy helper — prefer {@link parseProductQuantity} for all new code.
+ * `parseProductQuantity` extracts both weight and unit count in a single pass
+ * and handles all modern multi-pack formats.
+ *
  * Extract the number of units in a pack from a product name.
  * e.g. "Pañales Dodot 44 unidades" → 44, "Dodot T5 42 uds" → 42
  * Handles multi-pack formats: "2 x 44" → 88, "3x48 uds" → 144
  * Input is internal scraped data (not user-controlled).
+ *
+ * @deprecated Use {@link parseProductQuantity} instead — it returns the full
+ * `ParsedQuantity` struct (packageSize + netWeight + netWeightUnit) and is used
+ * by all active scrapers. This function exists only for backwards compatibility.
  */
 export function extractPackageSize(name: string): number | undefined {
   const lower = name.toLowerCase();
@@ -133,8 +141,9 @@ export type ParsedQuantity = {
 };
 
 // Matches all recognised weight/volume units, longest-first to avoid ambiguity
-// (so "kg" beats "g", "ml" beats "l", "cl" beats "l")
-const WEIGHT_UNIT_PAT = "(kg|ml|cl|gr|mg|g|l)";
+// (so "kg" beats "g", "ml" beats "l", "cl" beats "l"; "litros?" before "l" for
+// Spanish full-word forms like "1 litro", "1,5 litros")
+const WEIGHT_UNIT_PAT = "(litros?|kg|ml|cl|gr|mg|g|l)";
 // Number allowing Spanish decimal comma: 1,5 or 1.5 or plain 42
 const NUM_PAT = "(\\d+(?:[,.]\\d+)?)";
 
@@ -163,15 +172,102 @@ const SINGLE_WEIGHT_RE = new RegExp(
 // so they fall through safely to the SINGLE_WEIGHT_RE negative-lookbehind.
 const TALLA_WEIGHT_RE = /\b(?:T\d+\+?|talla\s+\d+\+?)\s+\d+\s*kg\b/gi;
 
-// Unit count: "44 uds", "44 unidades", "44 pañales", "42 UNID."
-const UNIT_COUNT_RE =
-  /(\d+)\s*(uds?\.?|und\w*|unid\.?|unidades?|pa[nñ]ales)\b/i;
+// Unit count — generic consumer: "44 uds", "44 unidades", "44 pañales", "42 UNID.", "4u", "4 u."
+// u(?:ds?)? matches: u, ud, uds (bare "u" added for compact Spanish notation like "4u").
+// Negative lookbehind (?<![x×\d]) anchors the start of the digit run: prevents matching
+// mid-number suffixes ("8u" inside "6x48u") by requiring the digit is NOT preceded by x, ×,
+// or another digit — effectively requiring the number starts here, not inside a multiply pattern.
+const UNIT_COUNT_GENERIC_RE =
+  /(?<![x×\d])(\d+)\s*(u(?:ds?)?\.?|unid\.?|unidades?|pa[nñ]ales)\b/i;
+
+// "Pack de N" / "pack N" notation common in Spanish supermarkets
+const PACK_DE_RE = /\bpack\s+(?:de?\s+)?(\d+)\b/i;
 
 // Inline multiply without unit: "3x44" (counted items)
 const INLINE_MULT_RE = /(\d+)[x×](\d+)/i;
 
 // Spaced multiply without unit: "3 x 44" (counted items)
 const SPACED_MULT_RE = /(\d+)\s+[x×]\s+(\d+)/i;
+
+// x-prefix pack size modifier, optionally separated from weight: "x4 125g", "x4"
+// Used by some retailers (e.g. Amazon.es) to signal a multipack count.
+const XPREFIX_PACK_RE = /\b[x×](\d+)\b/i;
+
+/* eslint-enable sonarjs/slow-regex */
+
+// Pharmacy/dosage and counted-unit keywords checked via a Set to avoid regex
+// complexity. Avoids `sonarjs/regex-complexity` limit triggered by long alternation.
+const PHARMACY_UNIT_KEYWORDS = new Set([
+  "cápsula",
+  "cápsulas",
+  "capsula",
+  "capsulas",
+  "comprimido",
+  "comprimidos",
+  "pastilla",
+  "pastillas",
+  "sobre",
+  "sobres",
+  "ampolla",
+  "ampollas",
+  "tableta",
+  "tabletas",
+  "dosis",
+  "lavado",
+  "lavados",
+  // Paper and household counted units
+  "rollo",
+  "rollos",
+  "paquete",
+  "paquetes",
+  "hoja",
+  "hojas",
+  // Wipes — toallitas are counted like diapers, not measured by weight
+  "toallita",
+  "toallitas",
+]);
+
+// Container words whose count is a meaningful pack size and that may also carry
+// a per-container weight/volume (e.g. "6 latas 33cl", "4 bricks 200ml").
+const CONTAINER_KEYWORDS = new Set([
+  "lata",
+  "latas",
+  "botella",
+  "botellas",
+  "brick",
+  "bricks",
+  "brik",
+  "briks",
+  "bote",
+  "botes",
+]);
+
+// Set of keywords that represent individual countable units (not weight/volume).
+// Used by tryParseUnitCountMultiply to distinguish unit-count multiplications
+// (e.g. "3 x 48 uds") from weight multiplications (e.g. "3 x 80g").
+const UNIT_MULT_KEYWORDS = new Set([
+  "uds",
+  "ud",
+  "unidades",
+  "unidad",
+  "pañales",
+  "panales",
+  "toallitas",
+  "toallita",
+]);
+
+// Words that signal the outer-pack multiplier in "N pack M uds" naming patterns.
+const PACK_MULTIPLIER_WORDS = new Set(["pack", "packs", "paquete", "paquetes"]);
+
+/* eslint-disable sonarjs/slow-regex */
+
+// "N × M <unit_keyword>" — requires whitespace-separated keyword token so that
+// weight patterns like "3 x 80g" (unit="g", not a count keyword) fall through.
+const UNIT_MULT_EXPLICIT_RE = /(\d+)\s*[x×]\s*(\d+)\s+(\S+)/i;
+
+// Compact "48uds" or "6u" token: digit directly followed by a unit suffix.
+// Used to split such tokens before the token-scan in tryParseUnitCountMultiply.
+const COMPACT_UNIT_RE = /^(\d+)(uds?\.?|u\.?)$/i;
 
 /* eslint-enable sonarjs/slow-regex */
 
@@ -188,6 +284,8 @@ function normalizeToBaseUnit(
     case "mg":
       return { netWeight: Math.round(value / 1000), netWeightUnit: "g" };
     case "l":
+    case "litro":
+    case "litros":
       return { netWeight: Math.round(value * 1000), netWeightUnit: "ml" };
     case "cl":
       return { netWeight: Math.round(value * 10), netWeightUnit: "ml" };
@@ -218,14 +316,105 @@ export function parseProductQuantity(name: string): ParsedQuantity {
   // like "DODOT T5 17 KG 42 UNID." correctly return {packageSize: 42} rather
   // than {netWeight: 17000} just because the weight appeared first in the string.
   return (
+    tryParseUnitCountMultiply(name) ??
+    tryParsePackDeN(name) ??
     tryParseKeywordUnitCount(name) ??
+    tryParseContainerCount(name) ??
+    tryParseKeywordPharmacy(name) ??
     tryParseWeightQuantity(name) ??
     tryParseUnitMultiply(name) ??
     {}
   );
 }
 
-/** Try to extract weight/volume — handles multi-pack×weight and single weight. */
+/**
+ * Try to extract a multiplied unit count from multi-pack naming patterns:
+ *   "3 x 48 uds."       → { packageSize: 144 }   (explicit × notation)
+ *   "Pack 6 x 48 uds"   → { packageSize: 288 }   (pack prefix + explicit ×)
+ *   "6 paquetes 48uds"  → { packageSize: 288 }   (token scan, compact suffix)
+ *   "48 uds. pack 6"    → { packageSize: 288 }   (reversed order)
+ *
+ * Safety: only fires when the unit keyword is a counted-item keyword (uds, pañales…),
+ * NOT a weight unit (g, ml, kg). This ensures "3 x 80g" falls through to the
+ * weight parser instead of being read as 240 units.
+ */
+function tryParseUnitCountMultiply(name: string): ParsedQuantity | null {
+  return tryExplicitUnitMultiply(name) ?? tryTokenScanMultiply(name);
+}
+
+// Pattern 1: explicit "N × M <unit_keyword>" — whitespace before keyword token required
+// so "3 x 80g" (no space between "80" and "g") never triggers.
+function tryExplicitUnitMultiply(name: string): ParsedQuantity | null {
+  const em = UNIT_MULT_EXPLICIT_RE.exec(name);
+  if (!em) return null;
+  const keyword = (em[3] ?? "").toLowerCase().replace(/\.$/, "");
+  if (!UNIT_MULT_KEYWORDS.has(keyword)) return null;
+  return {
+    packageSize:
+      Number.parseInt(em[1] ?? "0", 10) * Number.parseInt(em[2] ?? "0", 10),
+  };
+}
+
+// Pattern 2: token scan for "N pack M uds", "M uds pack N", "N paquetes Muds" forms.
+function tryTokenScanMultiply(name: string): ParsedQuantity | null {
+  const tokens = expandCompactUnitTokens(name);
+  const counts = extractPackAndUdsCounts(tokens);
+  if (counts === null) return null;
+  // When udsCount is already very large it represents the pack total, not a per-box count.
+  // e.g. "Pack 2 cajas 1728 uds" → 1728 is the total (2×864), not 2×1728 = 3456.
+  // Threshold 500 exceeds any realistic single retail unit count in the Spanish market.
+  if (counts.udsCount > 500) return { packageSize: counts.udsCount };
+  return { packageSize: counts.packCount * counts.udsCount };
+}
+
+// Split tokens like "48uds" → ["48", "uds"] so compact suffixes are recognised.
+function expandCompactUnitTokens(name: string): string[] {
+  return name
+    .toLowerCase()
+    .split(/\s+/)
+    .flatMap((tok) => {
+      const cm = COMPACT_UNIT_RE.exec(tok);
+      return cm ? [cm[1] ?? "", cm[2] ?? ""] : [tok];
+    });
+}
+
+function extractPackAndUdsCounts(
+  tokens: string[],
+): { packCount: number; udsCount: number } | null {
+  let packCount: number | null = null;
+  let udsCount: number | null = null;
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i] ?? "";
+    const next = tokens[i + 1] ?? "";
+    if (/^\d+$/.test(tok)) {
+      const count = Number.parseInt(tok, 10);
+      const kw = next.endsWith(".") ? next.slice(0, -1) : next;
+      ({ packCount, udsCount } = classifyCount(kw, count, packCount, udsCount));
+    }
+    // Also handle keyword-before-number: "pack 6" where the digit follows the word
+    if (PACK_MULTIPLIER_WORDS.has(tok) && /^\d+$/.test(next)) {
+      const count = Number.parseInt(next, 10);
+      if (count >= 2 && count <= 12) packCount = count;
+    }
+  }
+  if (packCount !== null && udsCount !== null) return { packCount, udsCount };
+  return null;
+}
+
+function classifyCount(
+  kw: string,
+  count: number,
+  packCount: number | null,
+  udsCount: number | null,
+): { packCount: number | null; udsCount: number | null } {
+  if (PACK_MULTIPLIER_WORDS.has(kw) && count >= 2 && count <= 12)
+    return { packCount: count, udsCount };
+  if (UNIT_MULT_KEYWORDS.has(kw) && count >= 10)
+    return { packCount, udsCount: count };
+  return { packCount, udsCount };
+}
+
+/** Try to extract a weight/volume — handles multi-pack×weight and single weight. */
 function tryParseWeightQuantity(name: string): ParsedQuantity | null {
   // Remove baby wearer-weight labels ("T5 17 kg", "T5+ (16 kg)") before trying
   // to extract product weight. These labels describe the baby's body weight (size
@@ -241,17 +430,117 @@ function tryParseWeightQuantity(name: string): ParsedQuantity | null {
     );
     return count >= 2 ? { packageSize: count, ...normalized } : normalized;
   }
+
+  // Handle "x4 125g" / "x4125g" — x-prefix pack count followed by weight.
+  const xp = XPREFIX_PACK_RE.exec(cleaned);
   const sw = SINGLE_WEIGHT_RE.exec(cleaned);
+  if (xp && sw) {
+    const packSize = Number.parseInt(xp[1] ?? "1", 10);
+    const normalized = normalizeToBaseUnit(
+      parseNum(sw[1] ?? "0"),
+      sw[2] ?? "g",
+    );
+    return packSize >= 2
+      ? { packageSize: packSize, ...normalized }
+      : normalized;
+  }
+
   if (sw) {
     return normalizeToBaseUnit(parseNum(sw[1] ?? "0"), sw[2] ?? "g");
   }
   return null;
 }
 
-/** Try to extract a keyword-based unit count: "44 uds", "42 UNID.", "42 pañales". */
+/**
+ * Try to extract a pack count from "Pack de N" / "pack N" notation.
+ * Also enriches the result with per-unit weight/volume when the name contains
+ * both a pack indicator and a weight pattern (e.g. "pack 4 x 125g",
+ * "Pack de 6 botellas 1,5L"). Without this, "pack 4 x 125g" would lose the
+ * 125g and be compared by unit count instead of by per-100g.
+ */
+function tryParsePackDeN(name: string): ParsedQuantity | null {
+  const m = PACK_DE_RE.exec(name);
+  if (!m) return null;
+  const packageSize = Number.parseInt(m[1] ?? "0", 10);
+  const weight = tryParseWeightQuantity(name);
+  return { packageSize, ...weight };
+}
+
+/**
+ * Try to extract a container-based pack count with optional per-container weight.
+ *
+ * Handles "N <container> [weight]" patterns where the container word signals that
+ * N is the number of units and there may also be a per-unit weight/volume.
+ * Requires N >= 2 to avoid treating single items as packs.
+ *
+ * Examples:
+ *   "6 latas cerveza 33cl"   → { packageSize: 6, netWeight: 330, netWeightUnit: 'ml' }
+ *   "6 botellas agua 500ml"  → { packageSize: 6, netWeight: 500, netWeightUnit: 'ml' }
+ *   "4 bricks leche 200ml"   → { packageSize: 4, netWeight: 200, netWeightUnit: 'ml' }
+ *   "3 botes tomate 400g"    → { packageSize: 3, netWeight: 400, netWeightUnit: 'g' }
+ *   "1 botella 500ml"        → null (single item — falls through to weight parser)
+ */
+function tryParseContainerCount(name: string): ParsedQuantity | null {
+  const tokens = name.toLowerCase().split(/\s+/);
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const countToken = tokens[i];
+    if (!/^\d+$/.test(countToken)) continue;
+    const count = Number.parseInt(countToken, 10);
+    if (count < 2) continue;
+    const raw = tokens[i + 1] ?? "";
+    const keyword = raw.endsWith(".") ? raw.slice(0, -1) : raw;
+    if (!CONTAINER_KEYWORDS.has(keyword)) continue;
+    // Container matched — also extract per-container weight/volume if present.
+    const weight = tryParseWeightQuantity(name);
+    return { packageSize: count, ...weight };
+  }
+  return null;
+}
+
+/**
+ * Try to extract a keyword-based unit count: "44 uds", "42 UNID.", "42 pañales".
+ * Also enriches the result with per-unit weight/volume when the weight appears
+ * AFTER the unit count in the string — weight-after = per-unit weight.
+ * When weight appears BEFORE the unit count, it describes the total pack weight
+ * (e.g. "Queso 150g 8 ud." = 150g total for 8 slices, not 8×150g).
+ * Baby-size weight labels ("T5 17 kg") are stripped by tryParseWeightQuantity before
+ * extraction, so diapers remain safe ("DODOT T5 17 KG 42 UNID." → {packageSize:42}).
+ */
 function tryParseKeywordUnitCount(name: string): ParsedQuantity | null {
-  const uc = UNIT_COUNT_RE.exec(name);
-  if (uc) return { packageSize: Number.parseInt(uc[1] ?? "0", 10) };
+  const m = UNIT_COUNT_GENERIC_RE.exec(name);
+  if (!m) return null;
+  const packageSize = Number.parseInt(m[1] ?? "0", 10);
+
+  const mwIdx = MULTI_WEIGHT_RE.exec(name)?.index ?? Infinity;
+  const swIdx = SINGLE_WEIGHT_RE.exec(name)?.index ?? Infinity;
+  const weightIdx = Math.min(mwIdx, swIdx);
+
+  const weight = tryParseWeightQuantity(name);
+  // Liquid products (ml): volume is always per individual container — spread regardless
+  // of position ("33cl 6 unidades" means 6 × 33cl cans, not 33cl split across 6).
+  // Solid products (g): weight-before-count = total pack weight (e.g. "150g 8 ud.").
+  const shouldSpread = weight?.netWeightUnit === "ml" || weightIdx > m.index;
+  return shouldSpread ? { packageSize, ...weight } : { packageSize };
+}
+
+/**
+ * Try to extract a pharmacy/dosage unit count by scanning token pairs.
+ * Uses a Set lookup instead of a complex regex alternation to stay within the
+ * sonarjs/regex-complexity limit.
+ *
+ * Examples: "28 cápsulas", "40 comprimidos", "30 lavados"
+ */
+function tryParseKeywordPharmacy(name: string): ParsedQuantity | null {
+  const tokens = name.toLowerCase().split(/\s+/);
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const countToken = tokens[i];
+    if (!/^\d+$/.test(countToken)) continue;
+    const raw = tokens[i + 1] ?? "";
+    const keyword = raw.endsWith(".") ? raw.slice(0, -1) : raw;
+    if (PHARMACY_UNIT_KEYWORDS.has(keyword)) {
+      return { packageSize: Number.parseInt(countToken, 10) };
+    }
+  }
   return null;
 }
 
@@ -267,7 +556,8 @@ function tryMultiplyCount(m: RegExpExecArray | null): ParsedQuantity | null {
   if (!m) return null;
   const left = Number.parseInt(m[1] ?? "0", 10);
   const right = Number.parseInt(m[2] ?? "0", 10);
-  if (left >= 2 && left <= 9 && right >= 20 && right <= 250) {
+  // Allow up to 24 outer-packs for bulk purchases (e.g. "18 x 48" = 864 wipes).
+  if (left >= 2 && left <= 24 && right >= 20 && right <= 250) {
     return { packageSize: left * right };
   }
   return null;

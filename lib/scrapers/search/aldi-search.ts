@@ -17,6 +17,54 @@ interface AlgoliaHit {
   productUrl?: string;
   productPicture?: string;
   availability?: string;
+  // Structured quantity fields — more reliable than parsing the product name
+  salesUnit?: string; // e.g. "250 g unidad", "pack de 12 x 0,33 l", "unidad"
+}
+
+// Prefer structured salesUnit over product name for quantity. Aldi product names
+// rarely embed size info, but salesUnit always contains it in a clean format.
+function resolveAldiQuantity(
+  salesUnit: string | undefined,
+  productName: string,
+) {
+  if (salesUnit) {
+    const fromUnit = parseProductQuantity(salesUnit);
+    if (
+      fromUnit.packageSize !== undefined ||
+      fromUnit.netWeight !== undefined
+    ) {
+      return fromUnit;
+    }
+  }
+  return parseProductQuantity(productName);
+}
+
+function hitToResult(
+  hit: AlgoliaHit,
+  storeSlug: string,
+  storeName: string,
+): (SearchResult & { productUrl: string }) | null {
+  const productName = [hit.brandName, hit.productName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  if (!productName) return null;
+
+  const price = hit.salesPrice;
+  if (!price || !Number.isFinite(price) || price <= 0) return null;
+
+  const productUrl = hit.productUrl ?? "https://www.aldi.es";
+  return {
+    storeSlug,
+    storeName,
+    productName,
+    price,
+    currency: "EUR",
+    imageUrl: hit.productPicture ?? null,
+    productUrl,
+    isAvailable: true, // salesPrice present → in-store stock; "NONE" only means no online cart
+    ...resolveAldiQuantity(hit.salesUnit, productName),
+  };
 }
 
 export class AldiSearchScraper implements StoreSearchScraper {
@@ -37,6 +85,7 @@ export class AldiSearchScraper implements StoreSearchScraper {
             "productUrl",
             "productPicture",
             "availability",
+            "salesUnit",
           ].join(","),
         }).toString(),
       })),
@@ -67,30 +116,10 @@ export class AldiSearchScraper implements StoreSearchScraper {
 
     for (const indexResult of json.results ?? []) {
       for (const hit of indexResult.hits ?? []) {
-        const productName = [hit.brandName, hit.productName]
-          .filter(Boolean)
-          .join(" ")
-          .trim();
-        if (!productName) continue;
-
-        const price = hit.salesPrice;
-        if (!price || !Number.isFinite(price) || price <= 0) continue;
-
-        const productUrl = hit.productUrl ?? "https://www.aldi.es";
-        if (seen.has(productUrl)) continue;
-        seen.add(productUrl);
-
-        results.push({
-          storeSlug: this.storeSlug,
-          storeName: this.storeName,
-          productName,
-          price,
-          currency: "EUR",
-          imageUrl: hit.productPicture ?? null,
-          productUrl,
-          isAvailable: true, // salesPrice present → in-store stock; "NONE" only means no online cart
-          ...parseProductQuantity(productName),
-        });
+        const result = hitToResult(hit, this.storeSlug, this.storeName);
+        if (!result || seen.has(result.productUrl)) continue;
+        seen.add(result.productUrl);
+        results.push(result);
       }
     }
 

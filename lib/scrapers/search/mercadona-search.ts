@@ -1,4 +1,5 @@
 import { browserClient, parseProductQuantity } from "./scraper-utils";
+import type { ParsedQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // Mercadona exposes two official-looking JSON APIs used by tienda.mercadona.es:
@@ -14,7 +15,67 @@ type MercadonaPhoto = { regular?: string; zoom?: string };
 type MercadonaPriceInstructions = {
   unit_price?: number | string;
   bulk_price?: number | string;
+  // Structured quantity fields (present on every product in the Mercadona API)
+  size_format?: string | null; // "ud" | "l" | "ml" | "cl" | "g" | "kg"
+  unit_size?: number | null; // total quantity in size_format units
+  is_pack?: boolean; // true when product is a multi-container bundle
+  pack_size?: number | null; // size of each individual container (when is_pack=true)
+  total_units?: number | null; // number of containers in the bundle (when is_pack=true)
+  unit_name?: string | null; // "botellas", "paquetes", etc.
 };
+
+// Convert a Mercadona size_format + numeric value to { netWeight, netWeightUnit }.
+// Returns null for "ud" (units) or unknown formats.
+function fmtToNetWeight(
+  fmt: string,
+  value: number,
+): { netWeight: number; netWeightUnit: "g" | "ml" } | null {
+  switch (fmt) {
+    case "l":
+      return { netWeight: Math.round(value * 1000), netWeightUnit: "ml" };
+    case "ml":
+      return { netWeight: Math.round(value), netWeightUnit: "ml" };
+    case "cl":
+      return { netWeight: Math.round(value * 10), netWeightUnit: "ml" };
+    case "kg":
+      return { netWeight: Math.round(value * 1000), netWeightUnit: "g" };
+    case "g":
+    case "gr":
+      return { netWeight: Math.round(value), netWeightUnit: "g" };
+    default:
+      return null;
+  }
+}
+
+// Extract ParsedQuantity from Mercadona's structured price_instructions object.
+// More reliable than name-based parsing because it uses API-provided numeric fields
+// rather than regex-matching product titles that may embed baby weight ranges, etc.
+export function piToQuantity(pi: MercadonaPriceInstructions): ParsedQuantity {
+  const fmt = String(pi.size_format ?? "").toLowerCase();
+  const unitSize = typeof pi.unit_size === "number" ? pi.unit_size : null;
+  const packSize = typeof pi.pack_size === "number" ? pi.pack_size : null;
+  const totalUnits = typeof pi.total_units === "number" ? pi.total_units : null;
+  const isPack = Boolean(pi.is_pack);
+
+  if (!unitSize || unitSize <= 0) return {};
+
+  // "ud" = countable items (diapers, wipes, capsules, etc.)
+  if (fmt === "ud") {
+    // unit_size is always total item count (pack_size × total_units when is_pack=true)
+    return { packageSize: Math.round(unitSize) };
+  }
+
+  // For packs: each container's size comes from pack_size; for singles: use unit_size
+  const sizeValue = isPack && packSize && packSize > 0 ? packSize : unitSize;
+  const weight = fmtToNetWeight(fmt, sizeValue);
+  if (!weight) return {};
+
+  if (isPack && totalUnits && totalUnits >= 2) {
+    return { packageSize: totalUnits, ...weight };
+  }
+
+  return weight;
+}
 
 type MercadonaProduct = {
   id?: number | string;
@@ -29,6 +90,19 @@ type MercadonaCategory = {
   name?: string;
   products?: MercadonaProduct[];
 };
+
+// Prefer structured API fields over name-based regex parsing. Name parsing is
+// unreliable for Mercadona because product titles embed baby weight ranges
+// (e.g. "Pañales talla 5 de 11-16 kg") which trip up weight extractors.
+function resolveQuantity(
+  pi: MercadonaPriceInstructions,
+  name: string,
+): ParsedQuantity {
+  const fromApi = piToQuantity(pi);
+  const hasApiQty =
+    fromApi.packageSize !== undefined || fromApi.netWeight !== undefined;
+  return hasApiQty ? fromApi : parseProductQuantity(name);
+}
 
 function toSearchResult(
   product: MercadonaProduct,
@@ -45,6 +119,7 @@ function toSearchResult(
 
   const slug = product.slug ?? String(product.id ?? "");
   const imageUrl = product.photos?.[0]?.regular ?? null;
+  const quantity = resolveQuantity(product.price_instructions ?? {}, name);
 
   return {
     storeSlug: "mercadona",
@@ -55,7 +130,7 @@ function toSearchResult(
     imageUrl,
     productUrl: `https://tienda.mercadona.es/product/${encodeURIComponent(slug)}`,
     isAvailable: true,
-    ...parseProductQuantity(name),
+    ...quantity,
     ...(ean && { ean }),
   };
 }

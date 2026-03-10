@@ -1,15 +1,50 @@
+import type { ParsedQuantity } from "./scraper-utils";
 import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // tienda.froiz.com (old domain) is dead. Results come from the Empathy.co search API.
+// The API returns structured quantity fields: measurementUnit + measurementUnitRatio.
 type EmpathyItem = {
   __name?: string;
   __prices?: { current?: { value?: number } };
   imageUrl?: string;
   slug?: string;
   id?: string;
+  measurementUnit?: string;
+  measurementUnitRatio?: number;
 };
 type EmpathyResponse = { catalog?: { content?: EmpathyItem[] } };
+
+/**
+ * Resolve package size / net weight from Froiz Empathy.co structured fields.
+ * Falls back to name-based parsing when the structured fields are missing.
+ *
+ * Field mapping:
+ *   measurementUnit="Litro"     → netWeight (ml)  e.g. 1.5 → 1500 ml
+ *   measurementUnit="Unidad"    → packageSize      e.g. 58
+ *   measurementUnit="Kilogramo" → netWeight (g)    e.g. 0.2 → 200 g
+ */
+export function resolveFroizQuantity(item: EmpathyItem): ParsedQuantity {
+  const unit = item.measurementUnit?.toLowerCase();
+  const ratio = item.measurementUnitRatio;
+
+  if (!unit || !ratio || !Number.isFinite(ratio) || ratio <= 0) {
+    return parseProductQuantity(item.__name ?? "");
+  }
+
+  if (unit === "litro") {
+    return { netWeight: Math.round(ratio * 1000), netWeightUnit: "ml" };
+  }
+  if (unit === "unidad") {
+    return { packageSize: Math.round(ratio) };
+  }
+  if (unit === "kilogramo") {
+    return { netWeight: Math.round(ratio * 1000), netWeightUnit: "g" };
+  }
+
+  // Unknown unit — fall back to name parsing
+  return parseProductQuantity(item.__name ?? "");
+}
 
 export class FroizSearchScraper implements StoreSearchScraper {
   readonly storeSlug = "froiz";
@@ -61,7 +96,7 @@ export class FroizSearchScraper implements StoreSearchScraper {
             imageUrl: item.imageUrl ?? null,
             productUrl: `https://supermercado.froiz.com/product/${slug}`,
             isAvailable: true,
-            ...parseProductQuantity(productName),
+            ...resolveFroizQuantity(item),
           } satisfies SearchResult,
         ];
       });

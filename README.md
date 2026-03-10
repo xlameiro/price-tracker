@@ -261,6 +261,24 @@ Assign an issue to the coding agent by setting **Copilot** as the assignee, or f
 
 ---
 
+## Using this template without GitHub Copilot
+
+The following files are GitHub Copilot CLI / VS Code Copilot artifacts. They are committed intentionally so the whole team benefits from shared AI context, but they are **optional** — the app runs fine without them:
+
+| File / folder                     | Purpose                                           | Safe to delete? |
+| --------------------------------- | ------------------------------------------------- | --------------- |
+| `.github/copilot-instructions.md` | Project-wide Copilot instructions                 | Yes             |
+| `.github/instructions/`           | Per-directory instruction files                   | Yes             |
+| `.github/agents/`                 | Custom Copilot agent definitions                  | Yes             |
+| `.github/hooks/`                  | Agent lifecycle hooks (PostToolUse, etc.)         | Yes             |
+| `.agents/skills/`                 | Reusable Copilot skill library                    | Yes             |
+| `skills-lock.json`                | Skill version lock file                           | Yes             |
+| `AGENTS.md`                       | Task-execution guide for AI coding agents         | Yes             |
+| `CLAUDE.md`                       | Extended thinking context for Claude-based agents | Yes             |
+| `.vscode/mcp.json`                | MCP server configuration for VS Code              | Yes             |
+
+If you are forking this template for a non-Copilot open-source project, you can safely remove all of the above. The application code, tests, and quality gates are entirely independent of these files.
+
 ## Deploy
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)

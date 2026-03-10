@@ -102,10 +102,25 @@ export function slugify(text: string): string {
 }
 
 /**
- * Returns the singular unit label for per-unit price display based on product category.
- * Falls back to "ud." for unrecognised or missing categories.
+ * Returns the singular unit label for per-unit price display.
+ *
+ * Resolution order:
+ * 1. Category name → `CATEGORY_UNIT_LABELS` lookup (most specific)
+ * 2. netWeightUnit hint → infer from scraped weight data
+ * 3. Fallback → "ud."
+ *
+ * The netWeightUnit hint is useful in search results where we have scraped
+ * data but may not know the product category.
  */
-export function getUnitLabel(category: string | null | undefined): string {
-  if (!category) return "ud.";
-  return CATEGORY_UNIT_LABELS[category.toLowerCase()] ?? "ud.";
+export function getUnitLabel(
+  category: string | null | undefined,
+  netWeightUnit?: "g" | "ml" | null,
+): string {
+  if (category) {
+    const mapped = CATEGORY_UNIT_LABELS[category.toLowerCase()];
+    if (mapped) return mapped;
+  }
+  if (netWeightUnit === "g") return "kg";
+  if (netWeightUnit === "ml") return "l";
+  return "ud.";
 }

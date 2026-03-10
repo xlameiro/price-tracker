@@ -1,4 +1,12 @@
 import { Badge } from "@/components/ui/badge";
+import {
+  COMPARISON_HEADER,
+  comparablePrice,
+  compareByUnitPrice,
+  formatComparablePrice,
+  inferComparisonMode,
+  quantityLabel,
+} from "@/lib/price-comparison";
 
 export interface PriceRow {
   storeId: string;
@@ -20,92 +28,9 @@ interface PriceRankingTableProps {
   rows: PriceRow[];
 }
 
-// ---------------------------------------------------------------------------
-// Comparison engine
-// ---------------------------------------------------------------------------
-
-type ComparisonMode = "per100g" | "per100ml" | "perUnit" | "rawPrice";
-
-/**
- * Detect the best comparison unit from the available row data.
- * Uses majority vote: picks the mode that covers the most rows.
- * This prevents a small number of mis-parsed entries from overriding
- * the correct mode used by the majority of stores.
- */
-export function inferComparisonMode(rows: PriceRow[]): ComparisonMode {
-  let gCount = 0;
-  let mlCount = 0;
-  let unitOnlyCount = 0;
-  for (const row of rows) {
-    if (row.netWeightUnit === "g") gCount++;
-    else if (row.netWeightUnit === "ml") mlCount++;
-    else if (row.packageSize !== null) unitOnlyCount++;
-  }
-  const max = Math.max(gCount, mlCount, unitOnlyCount);
-  if (max === 0) return "rawPrice";
-  if (gCount === max) return "per100g";
-  if (mlCount === max) return "per100ml";
-  return "perUnit";
-}
-
-/**
- * Comparable price for a row given a mode, normalised to a common basis.
- * Returns null when the row lacks the data needed for the mode (goes to bottom).
- */
-export function comparablePrice(
-  row: PriceRow,
-  mode: ComparisonMode,
-): number | null {
-  const effective = row.subscribePrice ?? row.price;
-  switch (mode) {
-    case "per100g":
-    case "per100ml": {
-      if (row.netWeight === null || row.netWeight <= 0) return null;
-      const totalWeight = (row.packageSize ?? 1) * row.netWeight;
-      return (effective / totalWeight) * 100;
-    }
-    case "perUnit":
-      // Return null when packageSize is unknown — dividing by 1 would show the
-      // full pack price as if it were a per-unit price, which is misleading.
-      if (row.packageSize === null) return null;
-      return effective / row.packageSize;
-    case "rawPrice":
-      return effective;
-  }
-}
-
-const COMPARISON_HEADER: Record<ComparisonMode, string> = {
-  per100g: "€/100g",
-  per100ml: "€/100ml",
-  perUnit: "€/ud",
-  rawPrice: "€/ud",
-};
-
-function formatWeight(value: number, unit: "g" | "ml"): string {
-  if (unit === "g") {
-    if (value >= 1000) {
-      return `${new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 }).format(value / 1000)} kg`;
-    }
-    return `${value}g`;
-  }
-  if (value >= 1000) {
-    return `${new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 }).format(value / 1000)} L`;
-  }
-  return `${value} ml`;
-}
-
-function quantityLabel(row: PriceRow): string {
-  if (row.netWeight !== null && row.netWeightUnit !== null) {
-    const weightStr = formatWeight(row.netWeight, row.netWeightUnit);
-    return row.packageSize !== null && row.packageSize > 1
-      ? `${row.packageSize}×${weightStr}`
-      : weightStr;
-  }
-  if (row.packageSize !== null) {
-    return `${row.packageSize} uds`;
-  }
-  return "—";
-}
+// Re-export comparison utilities so callers that already import PriceRow
+// from this module don't need to change their imports.
+export { comparablePrice, inferComparisonMode } from "@/lib/price-comparison";
 
 // ---------------------------------------------------------------------------
 
@@ -153,17 +78,9 @@ export function PriceRankingTable({ rows }: Readonly<PriceRankingTableProps>) {
     );
   }
 
-  // Sort: comparable rows ascending, then unresolvable rows sorted by raw price.
+  // Sort: comparable rows ascending (including shipping cost), then unresolvable rows sorted by raw price.
   const mode = inferComparisonMode(rows);
-  const sorted = [...rows].sort((a, b) => {
-    const cA = comparablePrice(a, mode);
-    const cB = comparablePrice(b, mode);
-    if (cA !== null && cB !== null) return cA - cB;
-    if (cA === null && cB === null) {
-      return (a.subscribePrice ?? a.price) - (b.subscribePrice ?? b.price);
-    }
-    return cA === null ? 1 : -1;
-  });
+  const sorted = [...rows].sort((a, b) => compareByUnitPrice(a, b, mode, true));
 
   return (
     <div className="overflow-x-auto rounded-xl border border-foreground/10">
@@ -209,8 +126,13 @@ export function PriceRankingTable({ rows }: Readonly<PriceRankingTableProps>) {
         </thead>
         <tbody className="divide-y divide-foreground/5">
           {sorted.map((row, index) => {
-            const cPrice = comparablePrice(row, mode);
+            const cPrice = comparablePrice(row, mode, true);
             const isFirst = index === 0;
+            // Shipping was factored into the unit price — show a note so
+            // users understand why the displayed unit price may differ from
+            // a naive pack-price ÷ units calculation.
+            const hasShipping =
+              row.shippingCost !== null && row.shippingCost > 0;
 
             return (
               <tr
@@ -265,7 +187,17 @@ export function PriceRankingTable({ rows }: Readonly<PriceRankingTableProps>) {
                     }
                   >
                     {cPrice !== null ? (
-                      formatEUR(cPrice)
+                      <>
+                        {formatComparablePrice(cPrice, mode)}
+                        {hasShipping && (
+                          <span
+                            className="ml-1 text-xs font-normal text-foreground/40"
+                            title="Incluye coste de envío"
+                          >
+                            +envío
+                          </span>
+                        )}
+                      </>
                     ) : (
                       <span className="font-normal text-foreground/40">—</span>
                     )}

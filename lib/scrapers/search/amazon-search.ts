@@ -70,14 +70,16 @@ function parseSnsPrice(
   return undefined;
 }
 
-// Parse the regular price and the Subscribe & Save price from an Amazon PDP.
-// The PDP shows both prices even without a session:
-//   • .priceToPay → standard single-purchase checkout price
-//   • #sns-price / SNS widget  → recurring subscription price (lower)
+// Parse the regular price, Subscribe & Save price, and full product title from
+// an Amazon PDP. The PDP shows all of this even without a session:
+//   • .priceToPay / #corePrice_feature_div → standard single-purchase price
+//   • #sns-price / SNS widget → recurring subscription price (lower)
+//   • #productTitle → full untruncated title (SERP titles are often cut short)
 async function fetchPdpPrice(productUrl: string): Promise<{
   price: number;
   subscribePrice?: number;
   isAvailable: boolean;
+  pdpTitle: string | null;
 } | null> {
   try {
     const response = await browserClient.fetch(productUrl, { timeout: 10_000 });
@@ -110,7 +112,11 @@ async function fetchPdpPrice(productUrl: string): Promise<{
     const isAvailable =
       $("#add-to-cart-button").length > 0 || $("#buy-now-button").length > 0;
 
-    return { price, subscribePrice, isAvailable };
+    // The full title is in #productTitle — SERP titles are often truncated.
+    // If absent we fall back to null and the SERP title is used instead.
+    const pdpTitle = $("#productTitle").first().text().trim() || null;
+
+    return { price, subscribePrice, isAvailable, pdpTitle };
   } catch {
     return null;
   }
@@ -144,7 +150,7 @@ export class AmazonSearchScraper implements StoreSearchScraper {
         : null;
 
       $('[data-component-type="s-search-result"]').each((_, el) => {
-        if (candidates.length >= 5) return false; // cheerio uses false to break
+        if (candidates.length >= 8) return false; // cheerio uses false to break
 
         const item = $(el);
 
@@ -162,15 +168,11 @@ export class AmazonSearchScraper implements StoreSearchScraper {
 
         // Extract the bare ASIN and build a canonical PDP URL, stripping all
         // referral/tracking params (/ref=..., ?keywords=..., etc.).
+        // Skip sponsored tiles without a real ASIN dp/ path — they lack
+        // stable pricing data and clutter the results.
         const asinMatch = /\/dp\/([A-Z0-9]{10})/i.exec(href);
-        let productUrl: string;
-        if (asinMatch) {
-          productUrl = `https://www.amazon.es/dp/${asinMatch[1]}`;
-        } else if (href.startsWith("http")) {
-          productUrl = href;
-        } else {
-          productUrl = `https://www.amazon.es${href}`;
-        }
+        if (!asinMatch) return;
+        const productUrl = `https://www.amazon.es/dp/${asinMatch[1]}`;
 
         const imageUrl =
           item.find("img.s-image").attr("src") ??
@@ -200,10 +202,17 @@ export class AmazonSearchScraper implements StoreSearchScraper {
         const pdp = pdpResults[i];
         if (!candidate || !pdp) continue;
 
+        // Re-parse quantity from the full PDP title when available — SERP titles
+        // are frequently truncated and may miss the pack size (e.g. "44 uds").
+        const titleForQty = pdp.pdpTitle ?? candidate.productName;
+        const parsedQty = pdp.pdpTitle
+          ? parseProductQuantity(pdp.pdpTitle)
+          : candidate.parsedQty;
+
         results.push({
           storeSlug: this.storeSlug,
           storeName: this.storeName,
-          productName: candidate.productName,
+          productName: titleForQty,
           price: pdp.price,
           ...(pdp.subscribePrice !== undefined && {
             subscribePrice: pdp.subscribePrice,
@@ -212,7 +221,7 @@ export class AmazonSearchScraper implements StoreSearchScraper {
           imageUrl: candidate.imageUrl,
           productUrl: candidate.productUrl,
           isAvailable: pdp.isAvailable,
-          ...candidate.parsedQty,
+          ...parsedQty,
         });
       }
 

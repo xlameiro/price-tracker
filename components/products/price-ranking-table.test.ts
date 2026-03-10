@@ -87,7 +87,8 @@ describe("comparablePrice", () => {
 
   it("should correctly compute per100g price", () => {
     const row = makeRow({ netWeight: 500, netWeightUnit: "g", price: 2.5 });
-    expect(comparablePrice(row, "per100g")).toBeCloseTo(0.5);
+    // 2.50€ / 500g × 1000 = 5.00€/kg
+    expect(comparablePrice(row, "per100g")).toBeCloseTo(5.0);
   });
 
   it("should correctly compute perUnit price", () => {

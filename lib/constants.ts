@@ -158,15 +158,144 @@ export const DODOT_PRODUCTS = [
 export type DodotSlug = (typeof DODOT_PRODUCTS)[number]["slug"];
 
 // Maps a product category (lowercase) to the label used for per-unit price display
+/**
+ * Maps product category (lowercase) to the unit label used in per-unit price display.
+ *
+ * Values mean:
+ *  "pañal" / "ud." / "toallita" → discrete item count  (€/pañal, €/ud., €/toallita)
+ *  "g"  / "kg"                   → weight comparison     (€/kg)
+ *  "ml" / "l"                    → volume comparison     (€/l)
+ */
 export const CATEGORY_UNIT_LABELS: Readonly<Record<string, string>> = {
+  // ── Bebés ──────────────────────────────────────────────────────────────
   pañales: "pañal",
+  toallitas: "toallita",
+  "toallitas bebé": "toallita",
+  "leche infantil": "ml",
+  "leche maternizada": "ml",
+  "papillas bebé": "g",
+  papillas: "g",
+
+  // ── Lácteos y bebidas frías ────────────────────────────────────────────
   leche: "ml",
+  lácteos: "ml",
+  yogur: "ud.",
+  queso: "g",
+  mantequilla: "g",
+  nata: "ml",
+  kéfir: "ml",
+  "bebidas vegetales": "ml",
+  bebidas: "ml",
+
+  // ── Agua y refrescos ──────────────────────────────────────────────────
   agua: "L",
-  aceite: "ml",
   refrescos: "ml",
-  conservas: "g",
+  "bebidas carbonatadas": "ml",
+  zumos: "ml",
+  zumo: "ml",
+  "agua con gas": "L",
+  "bebidas energéticas": "ml",
+  cerveza: "ml",
+  vino: "ml",
+  cava: "ml",
+  sidra: "ml",
+  "bebidas alcohólicas": "ml",
+  licores: "ml",
+  "bebidas calientes": "g",
+  café: "g",
+  infusiones: "g",
+
+  // ── Aceites, salsas y condimentos ─────────────────────────────────────
+  aceite: "ml",
+  "aceite de oliva": "ml",
+  vinagre: "ml",
+  salsas: "ml",
+  "salsas y condimentos": "ml",
+
+  // ── Alimentación seca ─────────────────────────────────────────────────
   cereales: "g",
   pasta: "g",
   arroz: "g",
-  lácteos: "ml",
+  legumbres: "g",
+  "harina y levadura": "g",
+  harina: "g",
+  azúcar: "g",
+  sal: "g",
+  "frutos secos": "g",
+  muesli: "g",
+  "copos de avena": "g",
+  galletas: "g",
+  pan: "g",
+  "pan de molde": "g",
+  tostadas: "g",
+  snacks: "g",
+  "aperitivos y snacks": "g",
+  chocolates: "g",
+  "chocolates y dulces": "g",
+  "helados y postres": "g",
+
+  // ── Conservas y enlatados ─────────────────────────────────────────────
+  conservas: "g",
+  "conservas de pescado": "g",
+  "conservas vegetales": "g",
+  atún: "g",
+  sardinas: "g",
+
+  // ── Carne y pescado ───────────────────────────────────────────────────
+  carne: "g",
+  "carne y aves": "g",
+  pollo: "g",
+  ternera: "g",
+  cerdo: "g",
+  embutidos: "g",
+  charcutería: "g",
+  pescado: "g",
+  "pescado y marisco": "g",
+  marisco: "g",
+
+  // ── Frutas y verduras ─────────────────────────────────────────────────
+  frutas: "g",
+  verduras: "g",
+  "frutas y verduras": "g",
+  "fruta fresca": "g",
+  "verdura fresca": "g",
+
+  // ── Mermeladas, mieles y untables ─────────────────────────────────────
+  mermeladas: "g",
+  mermelada: "g",
+  miel: "g",
+
+  // ── Higiene personal ──────────────────────────────────────────────────
+  higiene: "ud.",
+  "higiene personal": "ud.",
+  gel: "ml",
+  "gel de ducha": "ml",
+  champú: "ml",
+  acondicionador: "ml",
+  "pasta de dientes": "ml",
+  desodorante: "ml",
+  crema: "ml",
+  "crema corporal": "ml",
+  "crema facial": "ml",
+  jabón: "ml",
+  compresas: "ud.",
+  tampones: "ud.",
+  "papel higiénico": "ud.",
+  pañuelos: "ud.",
+  "pañuelos faciales": "ud.",
+
+  // ── Limpieza del hogar ────────────────────────────────────────────────
+  limpieza: "ud.",
+  "limpieza hogar": "ud.",
+  "higiene del hogar": "ud.",
+  detergente: "ml",
+  "detergente ropa": "ml",
+  "detergente lavavajillas": "ml",
+  lavavajillas: "ml",
+  suavizante: "ml",
+  "lejía y desinfectantes": "ml",
+  lejía: "ml",
+  "limpiadores multiusos": "ml",
+  "bolsas de basura": "ud.",
+  "papel de cocina": "ud.",
 };

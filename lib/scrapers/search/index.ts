@@ -14,6 +14,7 @@ import { FarmaVazquezSearchScraper } from "./farmavazquez-search";
 import { FroizSearchScraper } from "./froiz-search";
 import { GadisSearchScraper } from "./gadis-search";
 import { HipercorSearchScraper } from "./hipercor-search";
+import { LidlSearchScraper } from "./lidl-search";
 import { MasPanalesSearchScraper } from "./maspanales-search";
 import { MercadonaSearchScraper } from "./mercadona-search";
 import { NappySearchScraper } from "./nappy-search";
@@ -23,6 +24,7 @@ import { PromoFarmaSearchScraper } from "./promofarma-search";
 import { isRelevant } from "./relevance";
 import { SupermercadoFamiliaSearchScraper } from "./supermercado-familia-search";
 import type { SearchResult, StoreSearchScraper } from "./types";
+import { validateSearchResults } from "./types";
 import { ViandviSearchScraper } from "./viandvi-search";
 
 export type { SearchResult } from "./types";
@@ -54,6 +56,7 @@ const activeScrapers: StoreSearchScraper[] = [
   new NappySearchScraper(),
   new MasPanalesSearchScraper(),
   new PromoFarmaSearchScraper(),
+  new LidlSearchScraper(),
 ];
 
 export const STORE_COUNT = activeScrapers.length;
@@ -82,9 +85,12 @@ export async function searchAllStores(query: string): Promise<SearchResult[]> {
     result.status === "fulfilled" ? result.value : [],
   );
 
+  // Validate scraper output — silently drop entries with NaN prices or empty names.
+  const valid = validateSearchResults(all);
+
   // EAN-matched results are always relevant; apply relevance filter only to
   // text-search results (those without an `ean` field set)
-  const filtered = all.filter(
+  const filtered = valid.filter(
     (r) => r.ean !== undefined || isRelevant(r.productName, query),
   );
 
@@ -107,7 +113,8 @@ export async function streamSearchAllStores(
     activeScrapers.map(async (scraper) => {
       try {
         const results = await scraper.search(ctx);
-        const relevant = results.filter(
+        const valid = validateSearchResults(results);
+        const relevant = valid.filter(
           (r) => r.ean !== undefined || isRelevant(r.productName, query),
         );
         if (relevant.length > 0) {

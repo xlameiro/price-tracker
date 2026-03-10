@@ -113,8 +113,8 @@ export default async function ProductPage({
       .sort((a, b) => a - b)[0] ?? null;
 
   const HERO_SUFFIX: Record<typeof compMode, string> = {
-    per100g: "por 100g",
-    per100ml: "por 100ml",
+    per100g: "por kg",
+    per100ml: "por litro",
     perUnit: `por ${unitLabel}`,
     rawPrice: "",
   };

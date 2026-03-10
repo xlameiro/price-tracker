@@ -108,6 +108,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "viandvi.es" },
       { protocol: "https", hostname: "www.arenal.com" },
       { protocol: "https", hostname: "nappy.es" },
+      { protocol: "https", hostname: "storage.googleapis.com" },
     ],
   },
   logging: {
