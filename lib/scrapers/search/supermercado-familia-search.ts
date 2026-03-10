@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { parseProductQuantity } from "./scraper-utils";
+import { resolveGtmItemQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // supermercadofamilia.com is dead (DNS fails). The store moved to familiaonline.es
@@ -78,7 +78,10 @@ export class SupermercadoFamiliaSearchScraper implements StoreSearchScraper {
           imageUrl: `${BASE_URL}/images/${id}.jpg`,
           productUrl,
           isAvailable: true,
-          ...parseProductQuantity(productName),
+          ...resolveGtmItemQuantity(
+            productName,
+            item["item_variant"] as string | undefined,
+          ),
         } satisfies SearchResult);
 
         if (results.length >= 5) return false;

@@ -655,6 +655,22 @@ export function parseSpanishPrice(raw: string): number {
   return Number.parseFloat(raw.replace(/[^\d,]/g, "").replace(",", "."));
 }
 
+/**
+ * Resolves quantity from a GTM ecommerce item payload.
+ * `item_variant` sometimes encodes the pack size (e.g. "48 uds"); if parsing
+ * yields something useful it takes precedence over the full product name.
+ */
+export function resolveGtmItemQuantity(
+  productName: string,
+  itemVariant?: string,
+): ParsedQuantity {
+  if (itemVariant) {
+    const qty = parseProductQuantity(itemVariant);
+    if (qty.packageSize != null || qty.netWeight != null) return qty;
+  }
+  return parseProductQuantity(productName);
+}
+
 /** Parse the refresh URL from an Akamai bot-challenge meta-refresh page. */
 function parseMetaRefreshUrl(html: string, baseOrigin: string): string | null {
   // Akamai sends: <meta http-equiv="refresh" content="5; URL='/path?bm-verify=...'" />
