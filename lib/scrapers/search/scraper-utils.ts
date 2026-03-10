@@ -242,6 +242,26 @@ const CONTAINER_KEYWORDS = new Set([
   "botes",
 ]);
 
+// Serving/slice words that indicate the count is the number of portions INSIDE a
+// single pack — not the number of independent items. When these appear alongside an
+// "N × Xg" pattern, the Xg is the TOTAL pack weight (same BUG #6 convention as
+// "N uds. Xg").
+//
+// Examples:
+//   "Queso lonchas 12 × 250g"   → 12 slices in a 250g pack  → {netWeight:250g}
+//   "Jamón 10 lonchas × 100g"   → 10 slices in a 100g pack  → {netWeight:100g}
+//   "Salmón filetes 4 × 120g"   → 4 fillets in a 120g pack  → {netWeight:120g}
+const SERVING_SLICE_KEYWORDS = new Set([
+  "loncha",
+  "lonchas",
+  "rebanada",
+  "rebanadas",
+  "filete",
+  "filetes",
+  "rodaja",
+  "rodajas",
+]);
+
 // Set of keywords that represent individual countable units (not weight/volume).
 // Used by tryParseUnitCountMultiply to distinguish unit-count multiplications
 // (e.g. "3 x 48 uds") from weight multiplications (e.g. "3 x 80g").
@@ -414,6 +434,36 @@ function classifyCount(
   return { packCount, udsCount };
 }
 
+/** True when the name contains a serving/slice keyword indicating in-pack portions. */
+function hasServingSliceKeyword(name: string): boolean {
+  const lower = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return [...SERVING_SLICE_KEYWORDS].some((k) => lower.includes(k));
+}
+
+/**
+ * Resolve a MULTI_WEIGHT_RE match to a ParsedQuantity.
+ *
+ * For SOLID weights (g): if the name contains a serving/slice keyword the count
+ * is the number of in-pack portions and the weight is the TOTAL pack weight
+ * (BUG #6b convention — same as "N uds. Xg").
+ *   "Queso lonchas 12 × 250g" → {netWeight:250g}
+ *
+ * In all other cases (liquids, or no slice keyword) the weight is per-unit.
+ *   "Atún claro 3×80g" → {packageSize:3, netWeight:80g}
+ */
+function resolveMultiWeight(mw: RegExpExecArray, name: string): ParsedQuantity {
+  const count = Math.round(parseNum(mw[1] ?? "1"));
+  const normalized = normalizeToBaseUnit(parseNum(mw[2] ?? "0"), mw[3] ?? "g");
+  if (count < 2) return normalized;
+  if (normalized.netWeightUnit === "g" && hasServingSliceKeyword(name)) {
+    return normalized;
+  }
+  return { packageSize: count, ...normalized };
+}
+
 /** Try to extract a weight/volume — handles multi-pack×weight and single weight. */
 function tryParseWeightQuantity(name: string): ParsedQuantity | null {
   // Remove baby wearer-weight labels ("T5 17 kg", "T5+ (16 kg)") before trying
@@ -422,14 +472,7 @@ function tryParseWeightQuantity(name: string): ParsedQuantity | null {
   const cleaned = name.replace(TALLA_WEIGHT_RE, " ").trim();
 
   const mw = MULTI_WEIGHT_RE.exec(cleaned);
-  if (mw) {
-    const count = Math.round(parseNum(mw[1] ?? "1"));
-    const normalized = normalizeToBaseUnit(
-      parseNum(mw[2] ?? "0"),
-      mw[3] ?? "g",
-    );
-    return count >= 2 ? { packageSize: count, ...normalized } : normalized;
-  }
+  if (mw) return resolveMultiWeight(mw, name);
 
   // Handle "x4 125g" / "x4125g" — x-prefix pack count followed by weight.
   const xp = XPREFIX_PACK_RE.exec(cleaned);

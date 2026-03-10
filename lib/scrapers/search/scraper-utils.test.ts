@@ -638,6 +638,57 @@ describe("parseProductQuantity", () => {
     });
   });
 
+  describe("BUG #6b — N×Xg with serving/slice keyword (no 'uds' token)", () => {
+    it("should treat solid weight as total pack weight when 'lonchas' keyword present", () => {
+      // Alcampo API returns "12 × 250g" without "uds" — same convention: 250g is total
+      expect(parseProductQuantity("Larsa queso lonchas 12 × 250 g")).toEqual({
+        netWeight: 250,
+        netWeightUnit: "g",
+      });
+    });
+
+    it("should treat solid weight as total pack weight for compact '12×250g lonchas'", () => {
+      expect(parseProductQuantity("Larsa queso lonchas 12×250g")).toEqual({
+        netWeight: 250,
+        netWeightUnit: "g",
+      });
+    });
+
+    it("should treat solid weight as total pack weight for 'lonchas' before the count", () => {
+      expect(
+        parseProductQuantity("Larsa queso cremoso 12 lonchas x 250 g"),
+      ).toEqual({
+        netWeight: 250,
+        netWeightUnit: "g",
+      });
+    });
+
+    it("should treat solid weight as total pack weight for 'filetes' keyword", () => {
+      expect(parseProductQuantity("Salmón ahumado 4 filetes × 120g")).toEqual({
+        netWeight: 120,
+        netWeightUnit: "g",
+      });
+    });
+
+    it("should NOT affect tuna multi-packs — no slice keyword present", () => {
+      // "3 x 80g" with no container/slice word: current per-unit behavior preserved
+      expect(parseProductQuantity("Atún claro 3 x 80g")).toEqual({
+        packageSize: 3,
+        netWeight: 80,
+        netWeightUnit: "g",
+      });
+    });
+
+    it("should NOT affect liquid multi-packs regardless of slice keyword", () => {
+      // Liquids are always per-unit — slice keywords don't change that
+      expect(parseProductQuantity("Bebida 6×330ml")).toEqual({
+        packageSize: 6,
+        netWeight: 330,
+        netWeightUnit: "ml",
+      });
+    });
+  });
+
   describe("ml volume before count (BUG #5)", () => {
     it("should spread ml volume even when it appears BEFORE the unit count keyword", () => {
       // "33 cl 6 unidades" — volume before count, but for liquids the volume is always per-can
