@@ -21,7 +21,7 @@ import { NappySearchScraper } from "./nappy-search";
 import { PrimorSearchScraper } from "./primor-search";
 import { resolveProductEans } from "./product-resolver";
 import { PromoFarmaSearchScraper } from "./promofarma-search";
-import { isRelevant } from "./relevance";
+import { filterVariantConflicts, isRelevant } from "./relevance";
 import { SupermercadoFamiliaSearchScraper } from "./supermercado-familia-search";
 import type { SearchResult, StoreSearchScraper } from "./types";
 import { validateSearchResults } from "./types";
@@ -94,7 +94,8 @@ export async function searchAllStores(query: string): Promise<SearchResult[]> {
     (r) => r.ean !== undefined || isRelevant(r.productName, query),
   );
 
-  return filtered.sort((a, b) => a.price - b.price);
+  const deduped = filterVariantConflicts(filtered, query);
+  return deduped.sort((a, b) => a.price - b.price);
 }
 
 /**
@@ -117,8 +118,9 @@ export async function streamSearchAllStores(
         const relevant = valid.filter(
           (r) => r.ean !== undefined || isRelevant(r.productName, query),
         );
-        if (relevant.length > 0) {
-          onBatch(relevant);
+        const deduped = filterVariantConflicts(relevant, query);
+        if (deduped.length > 0) {
+          onBatch(deduped);
         }
       } catch {
         // individual scraper errors silently discarded

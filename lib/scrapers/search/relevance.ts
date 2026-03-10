@@ -115,3 +115,64 @@ export function isRelevant(productName: string, query: string): boolean {
   const matched = words.filter((t) => normName.includes(t));
   return matched.length / words.length >= 0.8;
 }
+
+// ── Variant-conflict filter ───────────────────────────────────────────────────
+// Carbonated vs still is the most common variant mismatch in food/drink searches.
+// Phrases that always indicate sparkling / carbonated products.
+const CON_GAS_PHRASES = [
+  "con gas",
+  "carbonatada",
+  "carbonatado",
+  "con burbujas",
+  "sparkling",
+];
+
+// Phrases that explicitly request still / non-carbonated products.
+const SIN_GAS_PHRASES = ["sin gas", "still"];
+
+function normPhrase(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function hasCarbonatedMarker(text: string): boolean {
+  const n = normPhrase(text);
+  return CON_GAS_PHRASES.some((p) => n.includes(p));
+}
+
+function hasStillMarker(text: string): boolean {
+  const n = normPhrase(text);
+  return SIN_GAS_PHRASES.some((p) => n.includes(p));
+}
+
+/**
+ * Removes results whose gas variant contradicts the query intent.
+ *
+ * Rules:
+ * - Query requests sparkling ("con gas" / "carbonatada") → remove still-only results.
+ * - Query requests still ("sin gas") → remove sparkling results.
+ * - No explicit preference → remove sparkling results by default.
+ *
+ * Safety: if filtering would leave zero results the original set is returned
+ * unchanged (handles sparkling-only brands like Vichy Catalan or Perrier where
+ * ALL results have "con gas" in the name).
+ */
+export function filterVariantConflicts<item extends { productName: string }>(
+  results: readonly item[],
+  query: string,
+): item[] {
+  const queryWantsSparkling = hasCarbonatedMarker(query);
+
+  if (queryWantsSparkling) {
+    // User explicitly asked for sparkling — drop results that say "sin gas".
+    const keep = results.filter((r) => !hasStillMarker(r.productName));
+    return keep.length > 0 ? keep : [...results];
+  }
+
+  // Either "sin gas" or no preference → filter out sparkling results.
+  const keep = results.filter((r) => !hasCarbonatedMarker(r.productName));
+  // If every result is sparkling (e.g. searching "Vichy Catalan"), return all.
+  return keep.length > 0 ? keep : [...results];
+}
