@@ -8,20 +8,26 @@
  * No API key required. Rate-limit: be polite — 1 search per user request.
  */
 
+import { z } from "zod";
+
 const MAX_EANS = 5;
 const OFF_SEARCH_URL = "https://world.openfoodfacts.org/cgi/search.pl";
 
-type OffProduct = {
-  code?: string;
-  product_name?: string;
-  product_name_es?: string;
-  image_url?: string;
-};
+const OffProductSchema = z
+  .object({
+    code: z.string().optional(),
+    product_name: z.string().optional(),
+    product_name_es: z.string().optional(),
+    image_url: z.string().optional(),
+  })
+  .loose();
 
-type OffSearchResponse = {
-  count?: number;
-  products?: OffProduct[];
-};
+const OffSearchResponseSchema = z
+  .object({
+    count: z.number().optional(),
+    products: z.array(OffProductSchema).optional(),
+  })
+  .loose();
 
 export interface ResolvedProduct {
   /** EAN/GTIN codes, most-scanned first */
@@ -59,7 +65,15 @@ export async function resolveProductEans(
 
     if (!response.ok) return { eans: [], canonicalName: query };
 
-    const data = (await response.json()) as OffSearchResponse;
+    const parsed = OffSearchResponseSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      console.warn(
+        "[product-resolver] Unexpected OFF API response shape:",
+        parsed.error.issues[0]?.message,
+      );
+      return { eans: [], canonicalName: query };
+    }
+    const { data } = parsed;
     const products = data.products ?? [];
 
     const eans = products

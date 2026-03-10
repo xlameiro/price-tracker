@@ -1,19 +1,37 @@
+import { z } from "zod";
 import type { ParsedQuantity } from "./scraper-utils";
 import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // tienda.froiz.com (old domain) is dead. Results come from the Empathy.co search API.
 // The API returns structured quantity fields: measurementUnit + measurementUnitRatio.
-type EmpathyItem = {
-  __name?: string;
-  __prices?: { current?: { value?: number } };
-  imageUrl?: string;
-  slug?: string;
-  id?: string;
-  measurementUnit?: string;
-  measurementUnitRatio?: number;
-};
-type EmpathyResponse = { catalog?: { content?: EmpathyItem[] } };
+const EmpathyItemSchema = z
+  .object({
+    __name: z.string().optional(),
+    __prices: z
+      .object({
+        current: z.object({ value: z.number().optional() }).loose().optional(),
+      })
+      .loose()
+      .optional(),
+    imageUrl: z.string().optional(),
+    slug: z.string().optional(),
+    id: z.string().optional(),
+    measurementUnit: z.string().optional(),
+    measurementUnitRatio: z.number().optional(),
+  })
+  .loose();
+
+type EmpathyItem = z.infer<typeof EmpathyItemSchema>;
+
+const EmpathyResponseSchema = z
+  .object({
+    catalog: z
+      .object({ content: z.array(EmpathyItemSchema).optional() })
+      .loose()
+      .optional(),
+  })
+  .loose();
 
 /**
  * Resolve package size / net weight from Froiz Empathy.co structured fields.
@@ -76,7 +94,15 @@ export class FroizSearchScraper implements StoreSearchScraper {
       });
       if (!response.ok) return [];
 
-      const data = (await response.json()) as EmpathyResponse;
+      const parsed = EmpathyResponseSchema.safeParse(await response.json());
+      if (!parsed.success) {
+        console.warn(
+          "[froiz-search] Unexpected API response shape:",
+          parsed.error.issues[0]?.message,
+        );
+        return [];
+      }
+      const { data } = parsed;
       const items = data.catalog?.content ?? [];
 
       return items.slice(0, 5).flatMap((item) => {

@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
@@ -12,19 +13,23 @@ import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 const DOOFINDER_API = "https://eu1-search.doofinder.com/5/search";
 const HASHID = "b8385fd3e2f32aadf43c359fb6791646";
 
-type DoofinderItem = {
-  title: string;
-  best_price: number;
-  price: number;
-  link: string;
-  image_link?: string;
-  availability?: string;
-};
+const DoofinderItemSchema = z
+  .object({
+    title: z.string(),
+    best_price: z.number(),
+    price: z.number(),
+    link: z.string(),
+    image_link: z.string().optional(),
+    availability: z.string().optional(),
+  })
+  .loose();
 
-type DoofinderResponse = {
-  results?: DoofinderItem[];
-  total?: number;
-};
+const DoofinderResponseSchema = z
+  .object({
+    results: z.array(DoofinderItemSchema).optional(),
+    total: z.number().optional(),
+  })
+  .loose();
 
 export class FarmaVazquezSearchScraper implements StoreSearchScraper {
   readonly storeSlug = "farmavazquez";
@@ -37,7 +42,6 @@ export class FarmaVazquezSearchScraper implements StoreSearchScraper {
       `&page=1&rpp=5&lang=es` +
       `&filter%5Bavailability%5D=in+stock`;
 
-    let data: DoofinderResponse;
     try {
       const response = await fetch(url, {
         headers: {
@@ -46,21 +50,28 @@ export class FarmaVazquezSearchScraper implements StoreSearchScraper {
         },
       });
       if (!response.ok) return [];
-      data = (await response.json()) as DoofinderResponse;
+      const parsed = DoofinderResponseSchema.safeParse(await response.json());
+      if (!parsed.success) {
+        console.warn(
+          "[farmavazquez-search] Unexpected API response shape:",
+          parsed.error.issues[0]?.message,
+        );
+        return [];
+      }
+      const { data } = parsed;
+      return (data.results ?? []).map((item) => ({
+        storeSlug: this.storeSlug,
+        storeName: this.storeName,
+        productName: item.title,
+        price: Math.round(item.best_price * 100) / 100,
+        currency: "EUR",
+        imageUrl: item.image_link ?? null,
+        productUrl: item.link,
+        isAvailable: true,
+        ...parseProductQuantity(item.title),
+      }));
     } catch {
       return [];
     }
-
-    return (data.results ?? []).map((item) => ({
-      storeSlug: this.storeSlug,
-      storeName: this.storeName,
-      productName: item.title,
-      price: Math.round(item.best_price * 100) / 100,
-      currency: "EUR",
-      imageUrl: item.image_link ?? null,
-      productUrl: item.link,
-      isAvailable: true,
-      ...parseProductQuantity(item.title),
-    }));
   }
 }

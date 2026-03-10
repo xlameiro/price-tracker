@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { z } from "zod";
 import { browserClient, parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
@@ -6,22 +7,68 @@ const BASE = "https://www.compraonline.alcampo.es";
 const PRODUCT_ID_RE = /\/products\/[^/]+\/(\d+)$/;
 const INITIAL_STATE_RE = /window\.__INITIAL_STATE__=(\{.*?\})<\/script>/s;
 
-type AlcampoEntity = {
-  name?: string;
-  retailerProductId?: string;
-  available?: boolean;
-  image?: { src?: string };
-  price?: { current?: { amount?: string; currency?: string } };
-};
+const AlcampoEntitySchema = z
+  .object({
+    name: z.string().optional(),
+    retailerProductId: z.string().optional(),
+    available: z.boolean().optional(),
+    image: z.object({ src: z.string().optional() }).loose().optional(),
+    price: z
+      .object({
+        current: z
+          .object({
+            amount: z.string().optional(),
+            currency: z.string().optional(),
+          })
+          .loose()
+          .optional(),
+      })
+      .loose()
+      .optional(),
+  })
+  .loose();
 
-type AlcampoState = {
-  data?: {
-    search?: {
-      catalogue?: { data?: { productGroups?: Array<{ products?: string[] }> } };
-    };
-    products?: { productEntities?: Record<string, AlcampoEntity> };
-  };
-};
+type AlcampoEntity = z.infer<typeof AlcampoEntitySchema>;
+
+const AlcampoStateSchema = z
+  .object({
+    data: z
+      .object({
+        search: z
+          .object({
+            catalogue: z
+              .object({
+                data: z
+                  .object({
+                    productGroups: z
+                      .array(
+                        z
+                          .object({ products: z.array(z.string()).optional() })
+                          .loose(),
+                      )
+                      .optional(),
+                  })
+                  .loose()
+                  .optional(),
+              })
+              .loose()
+              .optional(),
+          })
+          .loose()
+          .optional(),
+        products: z
+          .object({
+            productEntities: z
+              .record(z.string(), AlcampoEntitySchema)
+              .optional(),
+          })
+          .loose()
+          .optional(),
+      })
+      .loose()
+      .optional(),
+  })
+  .loose();
 
 function buildHrefMap($: cheerio.CheerioAPI): Map<string, string> {
   const map = new Map<string, string>();
@@ -33,10 +80,24 @@ function buildHrefMap($: cheerio.CheerioAPI): Map<string, string> {
   return map;
 }
 
-function parseInitialState(html: string): AlcampoState | null {
+function parseInitialState(
+  html: string,
+): z.infer<typeof AlcampoStateSchema> | null {
   const match = INITIAL_STATE_RE.exec(html);
   if (!match) return null;
-  return JSON.parse(match[1]) as AlcampoState;
+  try {
+    const parsed = AlcampoStateSchema.safeParse(JSON.parse(match[1]));
+    if (!parsed.success) {
+      console.warn(
+        "[alcampo-search] Unexpected __INITIAL_STATE__ shape:",
+        parsed.error.issues[0]?.message,
+      );
+      return null;
+    }
+    return parsed.data;
+  } catch {
+    return null;
+  }
 }
 
 function entityToResult(
@@ -89,8 +150,10 @@ export class AlcampoSearchScraper implements StoreSearchScraper {
       const results: SearchResult[] = [];
 
       for (const uuid of uuids) {
+        const entity = entities[uuid];
+        if (!entity) continue;
         const result = entityToResult(
-          entities[uuid] ?? {},
+          entity,
           query,
           hrefMap,
           this.storeSlug,

@@ -1,21 +1,23 @@
+import { z } from "zod";
 import { parseProductQuantity, fetchHtml } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 const BASE_URL = "https://www.farmaciasdirect.es";
 
-type ShopifyVariant = {
-  price: number;
-  name: string;
-};
+const ShopifyVariantSchema = z
+  .object({ price: z.number(), name: z.string() })
+  .loose();
 
-type ShopifyProduct = {
-  handle: string;
-  variants: ShopifyVariant[];
-};
+const ShopifyProductSchema = z
+  .object({
+    handle: z.string(),
+    variants: z.array(ShopifyVariantSchema),
+  })
+  .loose();
 
-type ShopifyMeta = {
-  products?: ShopifyProduct[];
-};
+const ShopifyMetaSchema = z
+  .object({ products: z.array(ShopifyProductSchema).optional() })
+  .loose();
 
 export class FarmaciasDirectSearchScraper implements StoreSearchScraper {
   readonly storeSlug = "farmaciasdirect";
@@ -56,7 +58,9 @@ export class FarmaciasDirectSearchScraper implements StoreSearchScraper {
 }
 
 /** Extract `var meta = {...}` injected by Shopify Analytics without regex backtracking. */
-function extractShopifyMeta(html: string): ShopifyMeta | null {
+function extractShopifyMeta(
+  html: string,
+): z.infer<typeof ShopifyMetaSchema> | null {
   const marker = 'var meta = {"products":';
   const markerIdx = html.indexOf(marker);
   if (markerIdx < 0) return null;
@@ -78,7 +82,17 @@ function extractShopifyMeta(html: string): ShopifyMeta | null {
   if (jsonEnd === jsonStart) return null;
 
   try {
-    return JSON.parse(html.slice(jsonStart, jsonEnd)) as ShopifyMeta;
+    const parsed = ShopifyMetaSchema.safeParse(
+      JSON.parse(html.slice(jsonStart, jsonEnd)),
+    );
+    if (!parsed.success) {
+      console.warn(
+        "[farmaciasdirect-search] Unexpected Shopify meta shape:",
+        parsed.error.issues[0]?.message,
+      );
+      return null;
+    }
+    return parsed.data;
   } catch {
     return null;
   }

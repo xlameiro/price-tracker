@@ -1,24 +1,33 @@
+import { z } from "zod";
 import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
-type MagentoProductItem = {
-  name: string;
-  url_key: string;
-  small_image: { url: string } | null;
-  price_range: {
-    minimum_price: {
-      final_price: { value: number; currency: string };
-    };
-  };
-};
+const MagentoProductItemSchema = z
+  .object({
+    name: z.string(),
+    url_key: z.string(),
+    small_image: z.object({ url: z.string() }).loose().nullable().optional(),
+    price_range: z.object({
+      minimum_price: z.object({
+        final_price: z.object({ value: z.number(), currency: z.string() }),
+      }),
+    }),
+  })
+  .loose();
 
-type GraphQlResponse = {
-  data?: {
-    products?: {
-      items: MagentoProductItem[];
-    };
-  };
-};
+const GraphQlResponseSchema = z
+  .object({
+    data: z
+      .object({
+        products: z
+          .object({ items: z.array(MagentoProductItemSchema) })
+          .loose()
+          .optional(),
+      })
+      .loose()
+      .optional(),
+  })
+  .loose();
 
 const GRAPHQL_QUERY = `
   query SearchProducts($search: String!) {
@@ -59,7 +68,15 @@ export class ArenalSearchScraper implements StoreSearchScraper {
 
       if (!response.ok) return [];
 
-      const json: GraphQlResponse = await response.json();
+      const parsed = GraphQlResponseSchema.safeParse(await response.json());
+      if (!parsed.success) {
+        console.warn(
+          "[arenal-search] Unexpected API response shape:",
+          parsed.error.issues[0]?.message,
+        );
+        return [];
+      }
+      const { data: json } = parsed;
       const items = json.data?.products?.items ?? [];
 
       return items

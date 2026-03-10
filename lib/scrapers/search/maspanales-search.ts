@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
@@ -6,18 +7,31 @@ import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 // search page HTML (~540KB), which is faster and more reliable.
 const MASPANALES_SEARCH = "https://maspanales.com/module/iqitsearch/searchiqit";
 
-type MasPanalesProduct = {
-  name?: string;
-  price_amount?: number;
-  url?: string;
-  cover?: {
-    bySize?: { home_default?: { url?: string } };
-  };
-};
+const MasPanalesProductSchema = z
+  .object({
+    name: z.string().optional(),
+    price_amount: z.number().optional(),
+    url: z.string().optional(),
+    cover: z
+      .object({
+        bySize: z
+          .object({
+            home_default: z
+              .object({ url: z.string().optional() })
+              .loose()
+              .optional(),
+          })
+          .loose()
+          .optional(),
+      })
+      .loose()
+      .optional(),
+  })
+  .loose();
 
-type MasPanalesResponse = {
-  products?: MasPanalesProduct[];
-};
+const MasPanalesResponseSchema = z
+  .object({ products: z.array(MasPanalesProductSchema).optional() })
+  .loose();
 
 export class MasPanalesSearchScraper implements StoreSearchScraper {
   readonly storeSlug = "maspanales";
@@ -36,7 +50,15 @@ export class MasPanalesSearchScraper implements StoreSearchScraper {
       );
       if (!response.ok) return [];
 
-      const data = (await response.json()) as MasPanalesResponse;
+      const parsed = MasPanalesResponseSchema.safeParse(await response.json());
+      if (!parsed.success) {
+        console.warn(
+          "[maspanales-search] Unexpected API response shape:",
+          parsed.error.issues[0]?.message,
+        );
+        return [];
+      }
+      const { data } = parsed;
       return (data.products ?? []).slice(0, 5).flatMap((product) => {
         const productName = product.name;
         const price = product.price_amount;

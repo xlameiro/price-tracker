@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { browserClient, parseProductQuantity } from "./scraper-utils";
 import type { ParsedQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
@@ -85,12 +86,6 @@ type MercadonaProduct = {
   slug?: string;
 };
 
-type MercadonaCategory = {
-  id?: string;
-  name?: string;
-  products?: MercadonaProduct[];
-};
-
 // Prefer structured API fields over name-based regex parsing. Name parsing is
 // unreliable for Mercadona because product titles embed baby weight ranges
 // (e.g. "Pañales talla 5 de 11-16 kg") which trip up weight extractors.
@@ -144,7 +139,15 @@ async function lookupByEan(ean: string): Promise<SearchResult | null> {
       headers: { Accept: "application/json" },
     });
     if (!response.ok) return null;
-    return toSearchResult((await response.json()) as MercadonaProduct, ean);
+    const parsed = MercadonaProductSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      console.warn(
+        "[mercadona-search] Unexpected EAN lookup response shape:",
+        parsed.error.issues[0]?.message,
+      );
+      return null;
+    }
+    return toSearchResult(parsed.data as MercadonaProduct, ean);
   } catch {
     return null;
   }
@@ -162,7 +165,33 @@ async function lookupByEan(ean: string): Promise<SearchResult | null> {
 //      category 217 ("Toallitas y pañales") which is the known fallback for the
 //      diapers/wipes use-case this app was originally built for.
 
-type MercadonaCategoryResponse = { categories?: MercadonaCategory[] };
+// Minimal Zod schemas for the two API response casts below.
+// Using .loose() throughout to tolerate extra fields added in future API versions.
+const MercadonaProductSchema = z
+  .object({
+    id: z.union([z.number(), z.string()]).optional(),
+    display_name: z.string().optional(),
+    price_instructions: z.record(z.string(), z.unknown()).optional(),
+    photos: z.array(z.record(z.string(), z.unknown())).optional(),
+    slug: z.string().optional(),
+  })
+  .loose();
+
+const MercadonaCategoryResponseSchema = z
+  .object({
+    categories: z
+      .array(
+        z
+          .object({
+            id: z.string().optional(),
+            name: z.string().optional(),
+            products: z.array(MercadonaProductSchema).optional(),
+          })
+          .loose(),
+      )
+      .optional(),
+  })
+  .loose();
 
 type MercadonaTopCategory = {
   id?: string | number;
@@ -252,8 +281,19 @@ async function fetchCategoryProducts(
       headers: { Accept: "application/json" },
     });
     if (!response.ok) return [];
-    const data = (await response.json()) as MercadonaCategoryResponse;
-    return (data.categories ?? []).flatMap((cat) => cat.products ?? []);
+    const parsed = MercadonaCategoryResponseSchema.safeParse(
+      await response.json(),
+    );
+    if (!parsed.success) {
+      console.warn(
+        "[mercadona-search] Unexpected category response shape:",
+        parsed.error.issues[0]?.message,
+      );
+      return [];
+    }
+    return (parsed.data.categories ?? []).flatMap(
+      (cat) => (cat.products ?? []) as MercadonaProduct[],
+    );
   } catch {
     return [];
   }

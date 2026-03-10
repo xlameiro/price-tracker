@@ -1,17 +1,28 @@
+import { z } from "zod";
 import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
 // viandvi.com is gone. The live store is viandvi.es (WooCommerce).
 // The search results page doesn't show prices, so we use the WooCommerce Store REST API.
-type WcProduct = {
-  name?: string;
-  prices?: { price?: string; currency_minor_unit?: number };
-  permalink?: string;
-  images?: Array<{ src?: string }>;
-  // WooCommerce Store API v1 availability fields
-  is_in_stock?: boolean;
-  on_backorder?: boolean;
-};
+const WcProductSchema = z
+  .object({
+    name: z.string().optional(),
+    prices: z
+      .object({
+        price: z.string().optional(),
+        currency_minor_unit: z.number().optional(),
+      })
+      .loose()
+      .optional(),
+    permalink: z.string().optional(),
+    images: z
+      .array(z.object({ src: z.string().optional() }).loose())
+      .optional(),
+    // WooCommerce Store API v1 availability fields
+    is_in_stock: z.boolean().optional(),
+    on_backorder: z.boolean().optional(),
+  })
+  .loose();
 
 export class ViandviSearchScraper implements StoreSearchScraper {
   readonly storeSlug = "viandvi";
@@ -37,8 +48,15 @@ export class ViandviSearchScraper implements StoreSearchScraper {
       });
       if (!response.ok) return [];
 
-      const data = (await response.json()) as WcProduct[];
-      if (!Array.isArray(data)) return [];
+      const parsed = z.array(WcProductSchema).safeParse(await response.json());
+      if (!parsed.success) {
+        console.warn(
+          "[viandvi-search] Unexpected API response shape:",
+          parsed.error.issues[0]?.message,
+        );
+        return [];
+      }
+      const { data } = parsed;
 
       return data.flatMap((item) => {
         const productName = item.name;

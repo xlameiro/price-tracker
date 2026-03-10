@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { parseProductQuantity } from "./scraper-utils";
 import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 
@@ -6,18 +7,31 @@ import type { SearchContext, SearchResult, StoreSearchScraper } from "./types";
 // the full search page HTML (~620KB), which was causing timeouts.
 const NAPPY_SEARCH = "https://nappy.es/module/iqitsearch/searchiqit";
 
-type NappyProduct = {
-  name?: string;
-  price_amount?: number;
-  url?: string;
-  cover?: {
-    bySize?: { home_default?: { url?: string } };
-  };
-};
+const NappyProductSchema = z
+  .object({
+    name: z.string().optional(),
+    price_amount: z.number().optional(),
+    url: z.string().optional(),
+    cover: z
+      .object({
+        bySize: z
+          .object({
+            home_default: z
+              .object({ url: z.string().optional() })
+              .loose()
+              .optional(),
+          })
+          .loose()
+          .optional(),
+      })
+      .loose()
+      .optional(),
+  })
+  .loose();
 
-type NappyResponse = {
-  products?: NappyProduct[];
-};
+const NappyResponseSchema = z
+  .object({ products: z.array(NappyProductSchema).optional() })
+  .loose();
 
 export class NappySearchScraper implements StoreSearchScraper {
   readonly storeSlug = "nappy";
@@ -34,7 +48,15 @@ export class NappySearchScraper implements StoreSearchScraper {
       );
       if (!response.ok) return [];
 
-      const data = (await response.json()) as NappyResponse;
+      const parsed = NappyResponseSchema.safeParse(await response.json());
+      if (!parsed.success) {
+        console.warn(
+          "[nappy-search] Unexpected API response shape:",
+          parsed.error.issues[0]?.message,
+        );
+        return [];
+      }
+      const { data } = parsed;
       return (data.products ?? []).slice(0, 5).flatMap((product) => {
         const productName = product.name;
         const price = product.price_amount;
