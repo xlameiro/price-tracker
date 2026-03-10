@@ -636,6 +636,24 @@ describe("parseProductQuantity", () => {
         netWeightUnit: "g",
       });
     });
+
+    it("should keep unit count for large discrete items (≥ 20 uds) even when solid weight follows", () => {
+      // Diapers / wipes packs: the gram weight is the total pack weight, but the
+      // count is what matters for per-unit price comparison.
+      expect(parseProductQuantity("Dodot Pure Aqua 48 uds 750g")).toEqual({
+        packageSize: 48,
+      });
+      expect(parseProductQuantity("Pampers Premium 44 uds 750g")).toEqual({
+        packageSize: 44,
+      });
+    });
+
+    it("should keep unit count for pañales keyword regardless of count size", () => {
+      // 'pañales' always signals a discrete countable item — never drop the count.
+      expect(parseProductQuantity("Pañales Dodot T5 18 pañales 380g")).toEqual({
+        packageSize: 18,
+      });
+    });
   });
 
   describe("BUG #6b — N×Xg with serving/slice keyword (no 'uds' token)", () => {
@@ -727,6 +745,39 @@ describe("parseProductQuantity", () => {
     it("should parse singular 'toallita'", () => {
       expect(parseProductQuantity("Dodot Pure Aqua 50 toallita")).toEqual({
         packageSize: 50,
+      });
+    });
+
+    it("should parse 'N ud' suffix in wipes name", () => {
+      expect(parseProductQuantity("Toallitas Dodot Pure Aqua 48 ud")).toEqual({
+        packageSize: 48,
+      });
+    });
+
+    it("should parse 'N Unidades' suffix in wipes name", () => {
+      expect(
+        parseProductQuantity("Toallitas bebé Dodot Pure & Aqua 48 Unidades"),
+      ).toEqual({ packageSize: 48 });
+    });
+
+    it("should parse 'N unidades' mid-word in wipes name", () => {
+      expect(
+        parseProductQuantity(
+          "Dodot Pure&Aqua Toallitas Bebé 48 unidades húmedas",
+        ),
+      ).toEqual({ packageSize: 48 });
+    });
+
+    it("should parse '3 x 48 toallitas' as multipack (144 units)", () => {
+      expect(parseProductQuantity("3 x 48 toallitas Dodot Pure Aqua")).toEqual({
+        packageSize: 144,
+      });
+    });
+
+    it("should parse 'N uds' in wipes pack with trailing comma", () => {
+      // Trailing comma after keyword must not break parse
+      expect(parseProductQuantity("Dodot Pure Aqua 48 uds, bebé")).toEqual({
+        packageSize: 48,
       });
     });
   });

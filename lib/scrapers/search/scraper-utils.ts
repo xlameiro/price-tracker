@@ -178,7 +178,8 @@ const TALLA_WEIGHT_RE = /\b(?:T\d+\+?|talla\s+\d+\+?)\s+\d+\s*kg\b/gi;
 // mid-number suffixes ("8u" inside "6x48u") by requiring the digit is NOT preceded by x, ×,
 // or another digit — effectively requiring the number starts here, not inside a multiply pattern.
 const UNIT_COUNT_GENERIC_RE =
-  /(?<![x×\d])(\d+)\s*(u(?:ds?)?\.?|unid\.?|unidades?|pa[nñ]ales)\b/i;
+  // eslint-disable-next-line sonarjs/regex-complexity
+  /(?<![x×\d])(\d+)\s*(u(?:ds?)?\.?|unid\.?|unidades?|pa[nñ]ales|toallitas?)\b/i;
 
 // "Pack de N" / "pack N" notation common in Spanish supermarkets
 const PACK_DE_RE = /\bpack\s+(?:de?\s+)?(\d+)\b/i;
@@ -556,6 +557,15 @@ function tryParseContainerCount(name: string): ParsedQuantity | null {
  *
  * Baby-size weight labels ("T5 17 kg") are stripped by tryParseWeightQuantity so
  * diapers remain safe ("DODOT T5 17 KG 42 UNID." → {packageSize:42}).
+ *
+ * Large-count rule: when packageSize ≥ 20 the item is almost certainly a discrete
+ * counted unit (diapers, wipes, capsules) whose pack weight is incidental. Keep
+ * the count and discard the solid weight so the ranking uses €/unit, not €/kg.
+ * Small counts (< 20) may represent food portions in a pack — the conventional
+ * Spanish labelling treats the following gram weight as the TOTAL pack weight.
+ *   "44 pañales 750g"  → { packageSize: 44 }   (large count, keep unit)
+ *   "48 uds 750g"      → { packageSize: 48 }   (large count, keep unit)
+ *   "12 uds. 250g"     → { netWeight: 250, g } (small count, total pack weight)
  */
 function tryParseKeywordUnitCount(name: string): ParsedQuantity | null {
   const m = UNIT_COUNT_GENERIC_RE.exec(name);
@@ -581,7 +591,14 @@ function tryParseKeywordUnitCount(name: string): ParsedQuantity | null {
     if (/×|\bx\b/.test(between)) {
       return { packageSize, ...weight };
     }
-    // No explicit multiplier → solid weight is the total pack weight (drop count).
+    // Diapers/panales keyword always signals a discrete counted item — keep the count.
+    // Large counts (≥ 20) are almost certainly discrete items too; small counts may be
+    // food portions where the gram weight is the meaningful comparison value.
+    const keyword = (m[2] ?? "").toLowerCase().replace(/\.$/, "");
+    if (/pa[nñ]ales/.test(keyword) || packageSize >= 20) {
+      return { packageSize };
+    }
+    // Small count, no explicit multiplier → solid weight is the total pack weight (drop count).
     return { netWeight: weight.netWeight, netWeightUnit: weight.netWeightUnit };
   }
 

@@ -108,6 +108,19 @@ describe("inferComparisonMode", () => {
     ];
     expect(inferComparisonMode(tied)).toBe("per100g");
   });
+
+  it("should return perUnit for wipes even when minority has weight data", () => {
+    // 4 toallitas results have packageSize; 1 scraper returned grams (wrong data)
+    // majority vote should preserve perUnit mode
+    const wipes: ComparableItem[] = [
+      { price: 5.99, packageSize: 48 },
+      { price: 7.5, packageSize: 56 },
+      { price: 4.95, packageSize: 48 },
+      { price: 6.49, packageSize: 52 },
+      { price: 3.0, netWeight: 67, netWeightUnit: "g" }, // one scraper returned weight
+    ];
+    expect(inferComparisonMode(wipes)).toBe("perUnit");
+  });
 });
 
 // ---------------------------------------------------------------------------
