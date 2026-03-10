@@ -6,6 +6,7 @@ import { ArenalSearchScraper } from "./arenal-search";
 import { AtidaSearchScraper } from "./atida-search";
 import { BmSearchScraper } from "./bm-search";
 import { CarrefourSearchScraper } from "./carrefour-search";
+import { DiaSearchScraper } from "./dia-search";
 import { DosFarmaSearchScraper } from "./dosfarma-search";
 import { ElCorteInglesSearchScraper } from "./elcorteingles-search";
 import { EroskiSearchScraper } from "./eroski-search";
@@ -14,13 +15,13 @@ import { FarmaVazquezSearchScraper } from "./farmavazquez-search";
 import { FroizSearchScraper } from "./froiz-search";
 import { GadisSearchScraper } from "./gadis-search";
 import { HipercorSearchScraper } from "./hipercor-search";
-import { LidlSearchScraper } from "./lidl-search";
+// To re-enable Lidl: add `import { LidlSearchScraper } from "./lidl-search"` and uncomment below.
 import { MasPanalesSearchScraper } from "./maspanales-search";
 import { MercadonaSearchScraper } from "./mercadona-search";
 import { NappySearchScraper } from "./nappy-search";
 import { PrimorSearchScraper } from "./primor-search";
 import { resolveProductEans } from "./product-resolver";
-import { PromoFarmaSearchScraper } from "./promofarma-search";
+// To re-enable PromoFarma: add `import { PromoFarmaSearchScraper } from "./promofarma-search"` and uncomment below.
 import { filterVariantConflicts, isRelevant } from "./relevance";
 import { SupermercadoFamiliaSearchScraper } from "./supermercado-familia-search";
 import type { SearchResult, StoreSearchScraper } from "./types";
@@ -55,11 +56,36 @@ const activeScrapers: StoreSearchScraper[] = [
   new AmazonSearchScraper(),
   new NappySearchScraper(),
   new MasPanalesSearchScraper(),
-  new PromoFarmaSearchScraper(),
-  new LidlSearchScraper(),
+  new DiaSearchScraper(),
+  // PromoFarma: React SPA — CSS selectors return 0 results from serverless (no real API found).
+  // new PromoFarmaSearchScraper(),
+  // Lidl: Nuxt.js SPA — window.__NUXT__ is empty; product grid requires JS execution.
+  // Re-enable once a Playwright-capable scraper is implemented.
+  // new LidlSearchScraper(),
 ];
 
 export const STORE_COUNT = activeScrapers.length;
+
+/**
+ * Deduplicate results keeping the single best (cheapest per-unit) entry per store.
+ * When packageSize is unknown, falls back to the raw price for comparison.
+ */
+function deduplicateByStore(results: SearchResult[]): SearchResult[] {
+  const best = new Map<string, SearchResult>();
+  for (const result of results) {
+    const existing = best.get(result.storeSlug);
+    if (!existing) {
+      best.set(result.storeSlug, result);
+      continue;
+    }
+    const existingUnit =
+      (existing.subscribePrice ?? existing.price) / (existing.packageSize ?? 1);
+    const newUnit =
+      (result.subscribePrice ?? result.price) / (result.packageSize ?? 1);
+    if (newUnit < existingUnit) best.set(result.storeSlug, result);
+  }
+  return [...best.values()];
+}
 
 /**
  * Two-phase search:
@@ -95,7 +121,12 @@ export async function searchAllStores(query: string): Promise<SearchResult[]> {
   );
 
   const deduped = filterVariantConflicts(filtered, query);
-  return deduped.sort((a, b) => a.price - b.price);
+
+  // Keep the best (cheapest per-unit) result per store so each store appears
+  // at most once in the ranking. Multiple variants of the same product from the
+  // same store are common (e.g. 48-ct vs 80-ct pack) but the comparison should
+  // show one representative price per store, not inflate the result count.
+  return deduplicateByStore(deduped).sort((a, b) => a.price - b.price);
 }
 
 /**
@@ -119,8 +150,10 @@ export async function streamSearchAllStores(
           (r) => r.ean !== undefined || isRelevant(r.productName, query),
         );
         const deduped = filterVariantConflicts(relevant, query);
-        if (deduped.length > 0) {
-          onBatch(deduped);
+        // Only the best per-unit result from this store goes to the stream.
+        const best = deduplicateByStore(deduped);
+        if (best.length > 0) {
+          onBatch(best);
         }
       } catch {
         // individual scraper errors silently discarded

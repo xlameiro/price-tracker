@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 
 // ─────────────────────────────────────────
-// Stores — all 25 covered providers
+// Stores — all 26 covered providers
 // ─────────────────────────────────────────
 
 const STORES = [
@@ -236,6 +236,16 @@ const STORES = [
     logoUrl: "https://logo.clearbit.com/promofarma.com",
     freeShippingThreshold: 59,
     shippingNote: null,
+    isActive: true,
+  },
+  {
+    name: "Día",
+    slug: "dia",
+    type: "BOTH" as const,
+    websiteUrl: "https://www.dia.es",
+    logoUrl: "https://logo.clearbit.com/dia.es",
+    freeShippingThreshold: 100,
+    shippingNote: "Envío 4,99€, gratis desde 100€",
     isActive: true,
   },
 ];
